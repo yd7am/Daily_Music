@@ -223,7 +223,7 @@ class AudioVisualizer:
         amplitudes *= freq_weights
         
         # 振幅缩放
-        amplitudes *= 0.7
+        amplitudes *= 0.8
         amplitudes = np.clip(amplitudes, 0, 1)
         
         # 平滑过渡（让变化更缓慢）
