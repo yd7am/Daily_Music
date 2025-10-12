@@ -78,11 +78,14 @@ class AudioVisualizer:
         self.freq_indices = np.where(freq_mask)[0]
         self.freqs = freqs[freq_mask]
         
-        # 对数频率分组
-        self.freq_bins = self._get_log_freq_bins()
+        # 频率分组（根据配置选择）
+        if config.USE_LOG_FREQ_SCALE:
+            self.freq_bins = self._get_log_freq_bins()  # 对数分组
+        else:
+            self.freq_bins = self._get_linear_freq_bins()  # 线性分组
     
     def _get_log_freq_bins(self):
-        """获取对数频率分组"""
+        """获取对数频率分组（符合人耳听觉特性）"""
         log_freqs = np.logspace(
             np.log10(config.FREQ_MIN),
             np.log10(config.FREQ_MAX),
@@ -93,6 +96,11 @@ class AudioVisualizer:
             idx = np.argmin(np.abs(self.freqs - freq))
             bins.append(idx)
         return np.array(bins)
+    
+    def _get_linear_freq_bins(self):
+        """获取线性频率分组（视觉上更均匀）"""
+        return np.linspace(0, len(self.freq_indices), 
+                          self.config['num_bars'] + 1, dtype=int)
     
     def _init_visualization(self):
         """初始化可视化参数"""
@@ -192,7 +200,7 @@ class AudioVisualizer:
             self.prev_amplitudes = amplitudes
         else:
             # 使用加权平均，让新值慢慢过渡
-            smooth_factor = 0.8  # 0.8 表示 80% 保持旧值，只有 20% 使用新值
+            smooth_factor = 0.9  # 0.8 表示 80% 保持旧值，只有 20% 使用新值
             amplitudes = smooth_factor * self.prev_amplitudes + (1 - smooth_factor) * amplitudes
             self.prev_amplitudes = amplitudes
         
