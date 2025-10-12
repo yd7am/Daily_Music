@@ -19,7 +19,13 @@ FREQ_MAX = 20000            # 最高频率 (Hz)
 N_FFT = 2048                # FFT窗口大小
 
 # 频率分组方式
-USE_LOG_FREQ_SCALE = False   # True=对数分组（符合听觉），False=线性分组（视觉均匀）
+USE_LOG_FREQ_SCALE = True   # True=对数分组（符合听觉），False=线性分组（视觉均匀）
+LOG_FREQ_POWER = 0.5        # 对数强度（0.3=接近线性，0.5=温和，1.0=完全对数）
+
+# 频率权重（用于平衡不同频率的显示）
+LOW_FREQ_WEIGHT = 0.5       # 低频权重（0.5 = 减半，1.0 = 原样，2.0 = 翻倍）
+MID_FREQ_WEIGHT = 1.0       # 中频权重
+HIGH_FREQ_WEIGHT = 1.5      # 高频权重（增强使其更明显）
 
 # ==================== 样式配置 ====================
 BAR_WIDTH_RATIO = 0.8       # 条形宽度比例 (0-1)

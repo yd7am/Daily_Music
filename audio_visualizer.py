@@ -85,14 +85,32 @@ class AudioVisualizer:
             self.freq_bins = self._get_linear_freq_bins()  # 线性分组
     
     def _get_log_freq_bins(self):
-        """获取对数频率分组（符合人耳听觉特性）"""
-        log_freqs = np.logspace(
-            np.log10(config.FREQ_MIN),
-            np.log10(config.FREQ_MAX),
-            self.config['num_bars'] + 1
-        )
+        """获取对数频率分组（可调节对数强度）"""
+        # 使用可调节的对数-线性混合
+        # power = 0: 完全线性
+        # power = 0.5: 温和对数（推荐）
+        # power = 1.0: 完全对数
+        power = config.LOG_FREQ_POWER
+        
+        # 归一化到 0-1
+        linear_space = np.linspace(0, 1, self.config['num_bars'] + 1)
+        
+        # 应用幂函数（模拟可调节的对数）
+        adjusted_space = np.power(linear_space, power)
+        
+        # 映射到实际频率
+        freq_min = config.FREQ_MIN
+        freq_max = config.FREQ_MAX
+        
+        # 对数空间映射
+        log_min = np.log10(freq_min)
+        log_max = np.log10(freq_max)
+        
+        log_freqs = log_min + adjusted_space * (log_max - log_min)
+        actual_freqs = np.power(10, log_freqs)
+        
         bins = []
-        for freq in log_freqs:
+        for freq in actual_freqs:
             idx = np.argmin(np.abs(self.freqs - freq))
             bins.append(idx)
         return np.array(bins)
@@ -191,8 +209,21 @@ class AudioVisualizer:
         # 归一化到 0-1
         amplitudes = (amplitudes - db_min) / (db_max - db_min)
         
-        # 振幅减半
-        amplitudes *= 0.7  # 从 2.0 改为 1.0（减半）
+        # 应用频率权重（平衡低/中/高频的显示）
+        freq_weights = np.ones(self.num_bars)
+        for i in range(self.num_bars):
+            ratio = i / (self.num_bars - 1)  # 0 到 1
+            if ratio < 0.3:  # 低频（前30%）
+                freq_weights[i] = config.LOW_FREQ_WEIGHT
+            elif ratio < 0.7:  # 中频（30%-70%）
+                freq_weights[i] = config.MID_FREQ_WEIGHT
+            else:  # 高频（后30%）
+                freq_weights[i] = config.HIGH_FREQ_WEIGHT
+        
+        amplitudes *= freq_weights
+        
+        # 振幅缩放
+        amplitudes *= 0.7
         amplitudes = np.clip(amplitudes, 0, 1)
         
         # 平滑过渡（让变化更缓慢）
@@ -200,7 +231,7 @@ class AudioVisualizer:
             self.prev_amplitudes = amplitudes
         else:
             # 使用加权平均，让新值慢慢过渡
-            smooth_factor = 0.9  # 0.8 表示 80% 保持旧值，只有 20% 使用新值
+            smooth_factor = 0.9  # 0.9 表示 90% 保持旧值，只有 10% 使用新值
             amplitudes = smooth_factor * self.prev_amplitudes + (1 - smooth_factor) * amplitudes
             self.prev_amplitudes = amplitudes
         
