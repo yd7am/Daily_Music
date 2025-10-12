@@ -301,11 +301,16 @@ class AudioVisualizer:
         center_x = self.width // 2
         center_y = self.height // 2
         angles = np.linspace(0, 2 * np.pi, self.num_bars, endpoint=False)
+        length = int(amplitudes[0] * 300)
+        radius = config.CIRCLE_RADIUS + length
+        last_x2 = int(center_x + radius * np.cos(angles[0]))
+        last_y2 = int(center_y + radius * np.sin(angles[0]))
+        last_x3 = int(center_x + config.CIRCLE_RADIUS * np.cos(angles[0]) - length * np.cos(angles[0]))
+        last_y3 = int(center_y + config.CIRCLE_RADIUS * np.sin(angles[0]) - length * np.sin(angles[0]))
         
         for i, (amp, angle) in enumerate(zip(amplitudes, angles)):
             length = int(amp * 300)
             radius = config.CIRCLE_RADIUS + length
-            
             x1 = int(center_x + config.CIRCLE_RADIUS * np.cos(angle))
             y1 = int(center_y + config.CIRCLE_RADIUS * np.sin(angle))
             x2 = int(center_x + radius * np.cos(angle))
@@ -317,6 +322,22 @@ class AudioVisualizer:
                     config.CIRCLE_LINE_WIDTH)
             cv2.line(frame, (x1, y1), (x3, y3), self.colors[i], 
                     config.CIRCLE_LINE_WIDTH)
+
+            if (i == 0):
+                cv2.line(frame, (int(center_x + radius * np.cos(angles[-1])), int(center_y + radius * np.sin(angles[-1]))), (x2, y2), self.colors[i], 
+                        config.CIRCLE_LINE_WIDTH)
+                cv2.line(frame, (int(x1 - length * np.cos(angles[-1])), int(y1 - length * np.sin(angles[-1]))), (x3, y3), self.colors[i], 
+                        config.CIRCLE_LINE_WIDTH)
+
+            if (i != 0):
+                cv2.line(frame, (last_x2, last_y2), (x2, y2), self.colors[i], 
+                        config.CIRCLE_LINE_WIDTH)
+                cv2.line(frame, (last_x3, last_y3), (x3, y3), self.colors[i], 
+                        config.CIRCLE_LINE_WIDTH)
+                last_x2 = x2
+                last_y2 = y2
+                last_x3 = x3
+                last_y3 = y3
         
         # 绘制中心圆
         # cv2.circle(frame, (center_x, center_y), config.CIRCLE_RADIUS, 
