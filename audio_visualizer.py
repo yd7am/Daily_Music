@@ -239,8 +239,8 @@ class AudioVisualizer:
         
         amplitudes *= freq_weights
         
-        # 振幅缩放
-        amplitudes *= 0.8
+        # 振幅缩放（限制最大高度）
+        amplitudes *= config.MAX_HEIGHT_RATIO
         amplitudes = np.clip(amplitudes, 0, 1)
         
         # 平滑过渡（让变化更缓慢）
@@ -303,19 +303,24 @@ class AudioVisualizer:
         angles = np.linspace(0, 2 * np.pi, self.num_bars, endpoint=False)
         
         for i, (amp, angle) in enumerate(zip(amplitudes, angles)):
-            radius = config.CIRCLE_RADIUS + int(amp * 300)
+            length = int(amp * 300)
+            radius = config.CIRCLE_RADIUS + length
             
             x1 = int(center_x + config.CIRCLE_RADIUS * np.cos(angle))
             y1 = int(center_y + config.CIRCLE_RADIUS * np.sin(angle))
             x2 = int(center_x + radius * np.cos(angle))
             y2 = int(center_y + radius * np.sin(angle))
+            x3 = int(x1 - length * np.cos(angle))
+            y3 = int(y1 - length * np.sin(angle))
             
             cv2.line(frame, (x1, y1), (x2, y2), self.colors[i], 
                     config.CIRCLE_LINE_WIDTH)
+            cv2.line(frame, (x1, y1), (x3, y3), self.colors[i], 
+                    config.CIRCLE_LINE_WIDTH)
         
         # 绘制中心圆
-        cv2.circle(frame, (center_x, center_y), config.CIRCLE_RADIUS, 
-                  (100, 100, 100), 2)
+        # cv2.circle(frame, (center_x, center_y), config.CIRCLE_RADIUS, 
+        #           (100, 100, 100), 2)
     
     def _draw_wave(self, frame, amplitudes):
         """绘制波形频谱"""

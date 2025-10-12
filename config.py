@@ -10,13 +10,14 @@ VIDEO_BITRATE = "5000k"     # 视频比特率
 
 # ==================== 音频配置 ====================
 SAMPLE_RATE = 44100         # 采样率
-HOP_LENGTH = 512            # 音频帧跳跃长度
+HOP_LENGTH = 128            # 音频帧跳跃长度
 
 # ==================== 频谱配置 ====================
 NUM_BARS = 80               # 频谱条数量（建议 80-120 获得更好的视觉效果）
 FREQ_MIN = 20                # 最低频率 (Hz) ⚠️ 不能为0！对数分组需要 >0
-FREQ_MAX = 2200              # 最高频率 (Hz)
-N_FFT = 2048                # FFT窗口大小
+FREQ_MAX = 1000              # 最高频率 (Hz)
+# 频域乘积，时域卷积，窗口越大窗函数越尖锐，频域分辨率越高，时域分辨率越低
+N_FFT = 4096                # FFT窗口大小
 
 # 频率分组方式
 USE_LOG_FREQ_SCALE = False   # True=对数分组（符合听觉），False=线性分组（视觉均匀）
@@ -28,10 +29,11 @@ MID_FREQ_WEIGHT = 1.0       # 中频权重
 HIGH_FREQ_WEIGHT = 1.0      # 高频权重（增强使其更明显）
 
 # 动态范围控制
-NOISE_GATE = -60            # 底噪门限（dB），低于此值视为静音（-60 到 -40）
-DYNAMIC_BOOST = 0.7         # 动态增强倍数（1.0 = 不增强，2.0 = 翻倍对比度）
+NOISE_GATE = -40            # 底噪门限（dB），低于此值视为静音（-60 到 -40）
+DYNAMIC_BOOST = 1.0         # 动态增强倍数（1.0 = 不增强，2.0 = 翻倍对比度）
 USE_POWER_CURVE = True      # 使用幂曲线增强对比度
 POWER_CURVE_EXP = 1.5       # 幂曲线指数（1.5-3.0，越大对比越强）
+MAX_HEIGHT_RATIO = 0.5      # 最大高度比例（0.5=一半，0.7=70%，1.0=全高）
 
 # ==================== 样式配置 ====================
 BAR_WIDTH_RATIO = 0.8       # 条形宽度比例 (0-1)
@@ -39,25 +41,25 @@ BAR_SPACING = 10             # 条形间距（像素）
 
 # ==================== 颜色配置 ====================
 # 颜色方案: 'gradient', 'rainbow', 'single', 'fire', 'ocean'
-COLOR_SCHEME = 'gradient'
+COLOR_SCHEME = 'single'
 
 # 渐变色配置 (RGB)
 GRADIENT_START = (0, 255, 255)    # 青色
 GRADIENT_END = (255, 0, 255)      # 品红色
 
 # 单色配置
-SINGLE_COLOR = (0, 255, 0)        # 绿色
+SINGLE_COLOR = (255, 255, 255)        # 白色
 
 # 背景颜色 (RGB)
 BACKGROUND_COLOR = (0, 0, 0)      # 黑色
 
 # ==================== 显示风格 ====================
 # 风格: 'bars', 'wave', 'circle', 'mirror'
-DISPLAY_STYLE = 'bars'
+DISPLAY_STYLE = 'circle'
 
 # 圆形频谱配置（当 DISPLAY_STYLE = 'circle' 时）
-CIRCLE_RADIUS = 200         # 圆形半径
-CIRCLE_LINE_WIDTH = 3       # 线条宽度
+CIRCLE_RADIUS = 250         # 圆形半径
+CIRCLE_LINE_WIDTH = 2       # 线条宽度
 
 # ==================== 文字配置 ====================
 SHOW_TITLE = True           # 是否显示标题
