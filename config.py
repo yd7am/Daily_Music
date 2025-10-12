@@ -64,13 +64,14 @@ CIRCLE_LINE_WIDTH = 2       # 线条宽度
 
 # 粒子系统配置
 ENABLE_PARTICLES = True     # 是否启用粒子效果
-PARTICLE_SPAWN_RATE = 10.0  # 粒子生成倍率（能量 × 倍率 = 粒子数）
-PARTICLE_SPEED = 4.0        # 粒子速度（像素/帧）
+PARTICLE_SPAWN_RATE = 55.0  # 粒子生成倍率（能量 × 倍率 = 粒子数）
+PARTICLE_SPEED = 3.0        # 粒子速度（像素/帧）
 PARTICLE_SIZE = 5           # 粒子大小（像素）
-PARTICLE_LIFETIME = 90      # 粒子生命周期（帧数）缩短以便更动态
+PARTICLE_LIFETIME = 300     # 粒子生命周期（帧数）缩短以便更动态
 PARTICLE_FADE = True        # 粒子是否淡出
 PARTICLE_COLOR = (255, 255, 0)  # 粒子颜色 (RGB) 黄色
-ENERGY_THRESHOLD = 0.4        # 能量阈值（低于此值不生成粒子）
+PARTICLE_PREDICTION = True  # 是否启用预测性同步（粒子提前生成）
+ENERGY_THRESHOLD = 0.02     # 能量阈值（低于此值不生成粒子）
 
 # ==================== 文字配置 ====================
 SHOW_TITLE = True           # 是否显示标题

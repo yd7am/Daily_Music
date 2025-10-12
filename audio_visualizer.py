@@ -521,22 +521,28 @@ class AudioVisualizer:
         
         # 粒子系统（根据频谱能量生成粒子）
         if config.ENABLE_PARTICLES:
-            # 计算当前帧的总能量（使用峰值和平均值的组合）
-            avg_energy = np.mean(amplitudes)
-            max_energy = np.max(amplitudes)
+            # 计算预测性同步的帧偏移
+            if config.PARTICLE_PREDICTION:
+                # 计算粒子到达圆上所需的时间（帧数）
+                travel_frames = int(config.CIRCLE_RADIUS / config.PARTICLE_SPEED)
+                # 获取未来帧的索引
+                future_frame_idx = frame_idx + travel_frames
+            else:
+                future_frame_idx = frame_idx
             
-            # 组合能量：70% 峰值 + 30% 平均，使其更敏感
-            energy = 0.7 * max_energy + 0.3 * avg_energy
+            # 获取未来帧的振幅（用于粒子生成）
+            future_amplitudes = self._get_frame_amplitudes(future_frame_idx)
             
-            # 增强能量（平方根使小值也能生成粒子）
-            energy = np.sqrt(np.clip(energy, 0, 1))
+            # 计算未来帧的总能量（使用平均值）
+            avg_energy = np.mean(future_amplitudes)
             
             # 在圆心位置生成粒子
             center_x = self.width // 2
             center_y = self.height // 2
+            
             # 只有能量大于能量阈值时才生成粒子
-            if energy > config.ENERGY_THRESHOLD:
-                num_spawned = self.particle_system.spawn_particles(center_x, center_y, energy)
+            if avg_energy > config.ENERGY_THRESHOLD:
+                num_spawned = self.particle_system.spawn_particles(center_x, center_y, avg_energy)
             else:
                 num_spawned = 0
             
@@ -547,7 +553,10 @@ class AudioVisualizer:
             # 调试：每100帧打印一次（可选，注释掉即可）
             if int(t * self.config['fps']) % 100 == 0:
                 total = self.particle_system.get_count()
-                print(f"新生成: {num_spawned}个, 屏幕总数: {total}个, 能量: {energy:.3f}")
+                if config.PARTICLE_PREDICTION:
+                    print(f"新生成: {num_spawned}个, 屏幕总数: {total}个, 能量: {avg_energy:.3f}, 提前: {travel_frames}帧")
+                else:
+                    print(f"新生成: {num_spawned}个, 屏幕总数: {total}个, 能量: {avg_energy:.3f}")
         
         # 添加标题
         self._add_title(frame)
