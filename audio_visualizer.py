@@ -6,7 +6,95 @@ import numpy as np
 import librosa
 import cv2
 from moviepy import AudioFileClip, VideoClip
+import random
 import config
+
+
+class Particle:
+    """粒子类"""
+    def __init__(self, x, y, vx, vy, color, size, lifetime):
+        self.x = x
+        self.y = y
+        self.vx = vx  # x方向速度
+        self.vy = vy  # y方向速度
+        self.color = color
+        self.size = size
+        self.lifetime = lifetime
+        self.age = 0
+    
+    def update(self):
+        """更新粒子位置和年龄"""
+        self.x += self.vx
+        self.y += self.vy
+        self.age += 1
+        return self.age < self.lifetime
+    
+    def draw(self, frame):
+        """绘制粒子"""
+        # cv2 使用 BGR 格式，需要转换颜色（RGB → BGR）
+        bgr_color = (self.color[2], self.color[1], self.color[0])
+        
+        if config.PARTICLE_FADE:
+            # 计算透明度（生命周期衰减）
+            alpha = 1.0 - (self.age / self.lifetime)
+            color = tuple(int(c * alpha) for c in bgr_color)
+        else:
+            color = bgr_color
+        
+        x, y = int(self.x), int(self.y)
+        if 0 <= x < frame.shape[1] and 0 <= y < frame.shape[0]:
+            cv2.circle(frame, (x, y), self.size, color, -1)
+
+
+class ParticleSystem:
+    """粒子系统"""
+    def __init__(self):
+        self.particles = []
+    
+    def spawn_particles(self, center_x, center_y, energy):
+        """根据能量生成粒子"""
+        if not config.ENABLE_PARTICLES:
+            return 0
+        
+        # 根据能量决定粒子数量
+        num_particles = int(energy * config.PARTICLE_SPAWN_RATE)
+        
+        for _ in range(num_particles):
+            # 随机方向（360度）
+            angle = random.uniform(0, 2 * np.pi)
+            
+            # 速度向量
+            speed = config.PARTICLE_SPEED
+            vx = speed * np.cos(angle)
+            vy = speed * np.sin(angle)
+            
+            # 创建粒子
+            particle = Particle(
+                x=float(center_x),
+                y=float(center_y),
+                vx=vx,
+                vy=vy,
+                color=config.PARTICLE_COLOR,
+                size=config.PARTICLE_SIZE,
+                lifetime=config.PARTICLE_LIFETIME
+            )
+            self.particles.append(particle)
+        
+        return num_particles  # 返回本次生成的数量
+    
+    def update(self):
+        """更新所有粒子"""
+        # 更新粒子并移除死亡的粒子
+        self.particles = [p for p in self.particles if p.update()]
+    
+    def draw(self, frame):
+        """绘制所有粒子"""
+        for particle in self.particles:
+            particle.draw(frame)
+    
+    def get_count(self):
+        """获取当前粒子数量"""
+        return len(self.particles)
 
 
 class AudioVisualizer:
@@ -41,6 +129,9 @@ class AudioVisualizer:
         
         # 平滑变化缓存
         self.prev_amplitudes = None
+        
+        # 初始化粒子系统
+        self.particle_system = ParticleSystem()
         
     def _load_config(self, kwargs):
         """加载配置参数"""
@@ -318,6 +409,9 @@ class AudioVisualizer:
             x3 = int(x1 - length * np.cos(angle))
             y3 = int(y1 - length * np.sin(angle))
             
+            # 在(x2, y2)上绘制圆点，参数控制点的大小
+            cv2.circle(frame, (x2, y2), 4, self.colors[i], -1)
+            
             cv2.line(frame, (x1, y1), (x2, y2), self.colors[i], 
                     config.CIRCLE_LINE_WIDTH)
             cv2.line(frame, (x1, y1), (x3, y3), self.colors[i], 
@@ -424,6 +518,36 @@ class AudioVisualizer:
             self._draw_wave(frame, amplitudes)
         else:
             self._draw_bars(frame, amplitudes)
+        
+        # 粒子系统（根据频谱能量生成粒子）
+        if config.ENABLE_PARTICLES:
+            # 计算当前帧的总能量（使用峰值和平均值的组合）
+            avg_energy = np.mean(amplitudes)
+            max_energy = np.max(amplitudes)
+            
+            # 组合能量：70% 峰值 + 30% 平均，使其更敏感
+            energy = 0.7 * max_energy + 0.3 * avg_energy
+            
+            # 增强能量（平方根使小值也能生成粒子）
+            energy = np.sqrt(np.clip(energy, 0, 1))
+            
+            # 在圆心位置生成粒子
+            center_x = self.width // 2
+            center_y = self.height // 2
+            # 只有能量大于能量阈值时才生成粒子
+            if energy > config.ENERGY_THRESHOLD:
+                num_spawned = self.particle_system.spawn_particles(center_x, center_y, energy)
+            else:
+                num_spawned = 0
+            
+            # 更新并绘制粒子
+            self.particle_system.update()
+            self.particle_system.draw(frame)
+            
+            # 调试：每100帧打印一次（可选，注释掉即可）
+            if int(t * self.config['fps']) % 100 == 0:
+                total = self.particle_system.get_count()
+                print(f"新生成: {num_spawned}个, 屏幕总数: {total}个, 能量: {energy:.3f}")
         
         # 添加标题
         self._add_title(frame)

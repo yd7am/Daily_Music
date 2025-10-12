@@ -31,7 +31,7 @@ HIGH_FREQ_WEIGHT = 1.0      # 高频权重（增强使其更明显）
 
 # 动态范围控制
 NOISE_GATE = -40            # 底噪门限（dB），低于此值视为静音（-60 到 -40）
-DYNAMIC_BOOST = 1.5         # 动态增强倍数（1.0 = 不增强，2.0 = 翻倍对比度）
+DYNAMIC_BOOST = 1.0        # 动态增强倍数（1.0 = 不增强，2.0 = 翻倍对比度）
 USE_POWER_CURVE = True      # 使用幂曲线增强对比度
 POWER_CURVE_EXP = 1.5       # 幂曲线指数（1.5-3.0，越大对比越强）
 MAX_HEIGHT_RATIO = 0.5      # 最大高度比例（0.5=一半，0.7=70%，1.0=全高）
@@ -61,6 +61,16 @@ DISPLAY_STYLE = 'circle'
 # 圆形频谱配置（当 DISPLAY_STYLE = 'circle' 时）
 CIRCLE_RADIUS = 250         # 圆形半径
 CIRCLE_LINE_WIDTH = 2       # 线条宽度
+
+# 粒子系统配置
+ENABLE_PARTICLES = True     # 是否启用粒子效果
+PARTICLE_SPAWN_RATE = 10.0  # 粒子生成倍率（能量 × 倍率 = 粒子数）
+PARTICLE_SPEED = 4.0        # 粒子速度（像素/帧）
+PARTICLE_SIZE = 5           # 粒子大小（像素）
+PARTICLE_LIFETIME = 90      # 粒子生命周期（帧数）缩短以便更动态
+PARTICLE_FADE = True        # 粒子是否淡出
+PARTICLE_COLOR = (255, 255, 0)  # 粒子颜色 (RGB) 黄色
+ENERGY_THRESHOLD = 0.4        # 能量阈值（低于此值不生成粒子）
 
 # ==================== 文字配置 ====================
 SHOW_TITLE = True           # 是否显示标题
