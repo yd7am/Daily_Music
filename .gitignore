@@ -1,0 +1,70 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+pip-wheel-metadata/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# 虚拟环境
+venv/
+ENV/
+env/
+.venv
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# 音频文件（输入）
+input/*.mp3
+input/*.wav
+input/*.flac
+input/*.m4a
+input/*.ogg
+input/*.aac
+
+# 视频文件（输出）
+output/*.mp4
+output/*.avi
+output/*.mov
+
+# 临时文件
+*.tmp
+*.temp
+.cache/
+
+# 日志文件
+*.log
+
+# 测试文件
+test_*.py
+tests/
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# 系统文件
+Thumbs.db
+desktop.ini

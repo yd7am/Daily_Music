@@ -1,0 +1,25 @@
+# 核心依赖（Python 3.13 兼容）
+numpy>=2.0.0
+scipy>=1.14.0
+
+# 音频处理
+librosa>=0.10.0
+pydub>=0.25.1
+soundfile>=0.12.1
+audioread>=3.0.0
+
+# 视频生成
+moviepy>=1.0.3
+opencv-python>=4.8.0
+Pillow>=10.0.0
+imageio>=2.25.0
+imageio-ffmpeg>=0.4.8
+proglog>=0.1.10
+
+# 可视化
+matplotlib>=3.7.0
+
+# 工具库
+tqdm>=4.65.0
+colorama>=0.4.6
+decorator>=4.3.0
