@@ -99,8 +99,13 @@ class AudioVisualizer:
         adjusted_space = np.power(linear_space, power)
         
         # 映射到实际频率
-        freq_min = config.FREQ_MIN
+        freq_min = max(config.FREQ_MIN, 1)  # 防止 log10(0) 错误，最小值为 1
         freq_max = config.FREQ_MAX
+        
+        # 检查频率范围是否有效
+        if freq_min >= freq_max:
+            print(f"警告: FREQ_MIN ({config.FREQ_MIN}) >= FREQ_MAX ({freq_max})，使用线性分组")
+            return self._get_linear_freq_bins()
         
         # 对数空间映射
         log_min = np.log10(freq_min)
@@ -199,8 +204,12 @@ class AudioVisualizer:
         
         amplitudes = np.array(amplitudes)
         
-        # 简单的 dB 映射到 0-1
-        db_min = -80
+        # 底噪门限：低于门限的视为静音
+        noise_gate = config.NOISE_GATE
+        amplitudes = np.where(amplitudes < noise_gate, noise_gate, amplitudes)
+        
+        # 动态范围映射
+        db_min = noise_gate  # 使用噪声门作为最小值
         db_max = 0
         
         # 限制范围
@@ -208,6 +217,14 @@ class AudioVisualizer:
         
         # 归一化到 0-1
         amplitudes = (amplitudes - db_min) / (db_max - db_min)
+        
+        # 应用幂曲线增强对比度（让强音更强，弱音更弱）
+        if config.USE_POWER_CURVE:
+            amplitudes = np.power(amplitudes, config.POWER_CURVE_EXP)
+        
+        # 动态增强（拉大响度差异）
+        amplitudes *= config.DYNAMIC_BOOST
+        amplitudes = np.clip(amplitudes, 0, 1)
         
         # 应用频率权重（平衡低/中/高频的显示）
         freq_weights = np.ones(self.num_bars)
