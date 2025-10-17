@@ -418,9 +418,13 @@ class AudioVisualizer:
                     config.CIRCLE_LINE_WIDTH)
 
             if (i == 0):
-                cv2.line(frame, (int(center_x + radius * np.cos(angles[-1])), int(center_y + radius * np.sin(angles[-1]))), (x2, y2), self.colors[i], 
+                length = int(amplitudes[-1] * 300)
+                radius = config.CIRCLE_RADIUS + length
+                x1_1 = int(center_x + radius * np.cos(angles[-1]))
+                y1_1 = int(center_y + radius * np.sin(angles[-1]))
+                cv2.line(frame, (x1_1, y1_1), (x2, y2), self.colors[i], 
                         config.CIRCLE_LINE_WIDTH)
-                cv2.line(frame, (int(x1 - length * np.cos(angles[-1])), int(y1 - length * np.sin(angles[-1]))), (x3, y3), self.colors[i], 
+                cv2.line(frame, (int(x1_1 - 2*length * np.cos(angles[-1])), int(y1_1 - 2*length * np.sin(angles[-1]))), (x3, y3), self.colors[i], 
                         config.CIRCLE_LINE_WIDTH)
 
             if (i != 0):
