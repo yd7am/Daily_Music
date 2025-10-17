@@ -11,12 +11,12 @@ VIDEO_BITRATE = "5000k"     # 视频比特率
 # ==================== 音频配置 ====================
 SAMPLE_RATE = 44100         # 采样率
 # 越小频率分辨率越高，计算量越大
-HOP_LENGTH = 512            # 音频帧跳跃长度
+HOP_LENGTH = 128            # 音频帧跳跃长度
 
 # ==================== 频谱配置 ====================
 NUM_BARS = 100               # 频谱条数量（建议 80-120 获得更好的视觉效果）
 FREQ_MIN = 20                # 最低频率 (Hz) ⚠️ 不能为0！对数分组需要 >0
-FREQ_MAX = 1000              # 最高频率 (Hz)
+FREQ_MAX = 1500              # 最高频率 (Hz)
 # 频域乘积，时域卷积，窗口越大窗函数越尖锐，频域分辨率越高，时域分辨率越低
 N_FFT = 4096                # FFT窗口大小
 
@@ -65,7 +65,7 @@ CIRCLE_LINE_WIDTH = 2       # 线条宽度
 # 粒子系统配置
 ENABLE_PARTICLES = True     # 是否启用粒子效果
 PARTICLE_SPAWN_RATE = 55.0  # 粒子生成倍率（能量 × 倍率 = 粒子数）
-PARTICLE_SPEED = 3.0        # 粒子速度（像素/帧）
+PARTICLE_SPEED = 6.0        # 粒子速度（像素/帧）
 PARTICLE_SIZE = 5           # 粒子大小（像素）
 PARTICLE_LIFETIME = 300     # 粒子生命周期（帧数）缩短以便更动态
 PARTICLE_FADE = True        # 粒子是否淡出
