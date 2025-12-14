@@ -6,7 +6,201 @@ import numpy as np
 import librosa
 import cv2
 from moviepy import AudioFileClip, VideoClip
+import random
 import config
+
+
+class Particle:
+    """粒子类"""
+    def __init__(self, x, y, vx, vy, color, size, lifetime):
+        self.x = x
+        self.y = y
+        self.vx = vx  # x方向速度
+        self.vy = vy  # y方向速度
+        self.color = color
+        self.size = size
+        self.lifetime = lifetime
+        self.age = 0
+    
+    def update(self):
+        """更新粒子位置和年龄"""
+        self.x += self.vx
+        self.y += self.vy
+        self.age += 1
+        return self.age < self.lifetime
+    
+    def draw(self, frame):
+        """绘制粒子"""
+        # 计算粒子到圆心的距离
+        center_x = frame.shape[1] // 2
+        center_y = frame.shape[0] // 2
+        distance = np.sqrt((self.x - center_x)**2 + (self.y - center_y)**2)
+        
+        # 圆内完全透明，圆外才显示
+        fade_zone = 10  # 渐变区域宽度（像素）
+        
+        # 计算基于距离的透明度
+        if distance < config.CIRCLE_RADIUS - fade_zone:
+            # 圆内：完全透明
+            distance_alpha = 0.0
+        elif distance < config.CIRCLE_RADIUS + fade_zone:
+            # 渐变区域：从0渐变到1
+            distance_alpha = (distance - (config.CIRCLE_RADIUS - fade_zone)) / (2 * fade_zone)
+        else:
+            # 圆外：完全可见
+            distance_alpha = 1.0
+        
+        # 如果距离透明度为0，直接返回不绘制
+        if distance_alpha == 0.0:
+            return
+        
+        # cv2 使用 BGR 格式，需要转换颜色（RGB → BGR）
+        bgr_color = (self.color[2], self.color[1], self.color[0])
+        
+        if config.PARTICLE_FADE:
+            # 计算透明度（生命周期衰减）
+            age_alpha = 1.0 - (self.age / self.lifetime)
+            # 综合距离透明度和生命周期透明度
+            final_alpha = age_alpha * distance_alpha
+            color = tuple(int(c * final_alpha) for c in bgr_color)
+        else:
+            color = tuple(int(c * distance_alpha) for c in bgr_color)
+        
+        x, y = int(self.x), int(self.y)
+        if 0 <= x < frame.shape[1] and 0 <= y < frame.shape[0]:
+            cv2.circle(frame, (x, y), self.size, color, -1)
+
+
+class ParticleSystem:
+    """粒子系统"""
+    def __init__(self):
+        self.particles = []
+        # 自适应能量阈值相关
+        self.energy_history = []  # 能量历史记录
+        self.history_size = config.ADAPTIVE_HISTORY_SIZE  # 从配置读取历史窗口大小
+        self.adaptive_threshold = config.ENERGY_THRESHOLD  # 动态阈值
+        self.peak_detection_ratio = config.PEAK_DETECTION_RATIO  # 从配置读取峰值检测比例
+        self.min_threshold = config.ADAPTIVE_MIN_THRESHOLD  # 从配置读取最小阈值
+        self.max_threshold = config.ADAPTIVE_MAX_THRESHOLD  # 从配置读取最大阈值
+        self.use_adaptive = config.USE_ADAPTIVE_THRESHOLD  # 是否使用自适应阈值
+    
+    def spawn_particles(self, center_x, center_y, energy):
+        """根据能量生成粒子"""
+        if not config.ENABLE_PARTICLES:
+            return 0
+        
+        # 根据能量决定粒子数量
+        num_particles = int(energy * config.PARTICLE_SPAWN_RATE)
+        
+        for _ in range(num_particles):
+            # 随机方向（360度）
+            angle = random.uniform(0, 2 * np.pi)
+            
+            # 速度向量
+            speed = config.PARTICLE_SPEED
+            vx = speed * np.cos(angle)
+            vy = speed * np.sin(angle)
+            
+            # 创建粒子
+            particle = Particle(
+                x=float(center_x),
+                y=float(center_y),
+                vx=vx,
+                vy=vy,
+                color=config.PARTICLE_COLOR,
+                size=config.PARTICLE_SIZE,
+                lifetime=config.PARTICLE_LIFETIME
+            )
+            self.particles.append(particle)
+        
+        return num_particles  # 返回本次生成的数量
+    
+    def update(self):
+        """更新所有粒子"""
+        # 更新粒子并移除死亡的粒子
+        self.particles = [p for p in self.particles if p.update()]
+    
+    def draw(self, frame):
+        """绘制所有粒子"""
+        for particle in self.particles:
+            particle.draw(frame)
+    
+    def get_count(self):
+        """获取当前粒子数量"""
+        return len(self.particles)
+    
+    def update_adaptive_threshold(self, current_energy):
+        """
+        更新自适应能量阈值
+        
+        Args:
+            current_energy: 当前帧的能量值
+        
+        Returns:
+            tuple: (是否应该生成粒子, 当前阈值)
+        """
+        # 如果不使用自适应阈值，直接使用固定阈值
+        if not self.use_adaptive:
+            should_spawn = current_energy > config.ENERGY_THRESHOLD
+            return should_spawn, config.ENERGY_THRESHOLD
+        
+        # 添加当前能量到历史记录
+        self.energy_history.append(current_energy)
+        
+        # 保持历史记录在指定大小内
+        if len(self.energy_history) > self.history_size:
+            self.energy_history.pop(0)
+        
+        # 如果历史记录不足，使用固定阈值
+        if len(self.energy_history) < 10:
+            self.adaptive_threshold = config.ENERGY_THRESHOLD
+            should_spawn = current_energy > self.adaptive_threshold
+            return should_spawn, self.adaptive_threshold
+        
+        # 计算统计值
+        mean_energy = np.mean(self.energy_history)
+        std_energy = np.std(self.energy_history)
+        max_energy = np.max(self.energy_history)
+        
+        # 方法1：基于均值和标准差的动态阈值
+        # 阈值 = 均值 + 0.5 * 标准差（可以捕捉高于平均水平的峰值）
+        threshold_1 = mean_energy + 0.5 * std_energy
+        
+        # 方法2：基于最大值的百分比
+        # 阈值 = 最大值的40%（避免过于敏感）
+        threshold_2 = max_energy * 0.4
+        
+        # 方法3：基于移动平均的倍数
+        # 只有当能量是近期平均的 peak_detection_ratio 倍时才触发
+        recent_window = min(30, len(self.energy_history))  # 最近1秒
+        recent_mean = np.mean(self.energy_history[-recent_window:])
+        threshold_3 = recent_mean * self.peak_detection_ratio
+        
+        # 综合三种方法：取中间值，避免过于激进或过于保守
+        threshold_candidates = [threshold_1, threshold_2, threshold_3]
+        self.adaptive_threshold = np.median(threshold_candidates)
+        
+        # 限制阈值在合理范围内
+        self.adaptive_threshold = np.clip(
+            self.adaptive_threshold, 
+            self.min_threshold, 
+            self.max_threshold
+        )
+        
+        # 峰值检测：当前能量需要明显高于近期平均值
+        is_peak = current_energy > self.adaptive_threshold
+        
+        # 额外的峰值增强检测：如果能量突然增加，更容易触发
+        if len(self.energy_history) >= 5:
+            # 计算能量变化率（当前能量 vs 前5帧平均）
+            prev_mean = np.mean(self.energy_history[-5:-1]) if len(self.energy_history) > 1 else mean_energy
+            if prev_mean > 0:
+                energy_increase_ratio = current_energy / prev_mean
+                # 如果能量突然增加50%以上，也认为是峰值
+                if energy_increase_ratio > 1.5 and current_energy > mean_energy:
+                    is_peak = True
+        
+        return is_peak, self.adaptive_threshold
 
 
 class AudioVisualizer:
@@ -41,6 +235,9 @@ class AudioVisualizer:
         
         # 平滑变化缓存
         self.prev_amplitudes = None
+        
+        # 初始化粒子系统
+        self.particle_system = ParticleSystem()
         
     def _load_config(self, kwargs):
         """加载配置参数"""
@@ -99,8 +296,13 @@ class AudioVisualizer:
         adjusted_space = np.power(linear_space, power)
         
         # 映射到实际频率
-        freq_min = config.FREQ_MIN
+        freq_min = max(config.FREQ_MIN, 1)  # 防止 log10(0) 错误，最小值为 1
         freq_max = config.FREQ_MAX
+        
+        # 检查频率范围是否有效
+        if freq_min >= freq_max:
+            print(f"警告: FREQ_MIN ({config.FREQ_MIN}) >= FREQ_MAX ({freq_max})，使用线性分组")
+            return self._get_linear_freq_bins()
         
         # 对数空间映射
         log_min = np.log10(freq_min)
@@ -199,8 +401,12 @@ class AudioVisualizer:
         
         amplitudes = np.array(amplitudes)
         
-        # 简单的 dB 映射到 0-1
-        db_min = -80
+        # 底噪门限：低于门限的视为静音
+        noise_gate = config.NOISE_GATE
+        amplitudes = np.where(amplitudes < noise_gate, noise_gate, amplitudes)
+        
+        # 动态范围映射
+        db_min = noise_gate  # 使用噪声门作为最小值
         db_max = 0
         
         # 限制范围
@@ -208,6 +414,14 @@ class AudioVisualizer:
         
         # 归一化到 0-1
         amplitudes = (amplitudes - db_min) / (db_max - db_min)
+        
+        # 应用幂曲线增强对比度（让强音更强，弱音更弱）
+        if config.USE_POWER_CURVE:
+            amplitudes = np.power(amplitudes, config.POWER_CURVE_EXP)
+        
+        # 动态增强（拉大响度差异）
+        amplitudes *= config.DYNAMIC_BOOST
+        amplitudes = np.clip(amplitudes, 0, 1)
         
         # 应用频率权重（平衡低/中/高频的显示）
         freq_weights = np.ones(self.num_bars)
@@ -222,8 +436,8 @@ class AudioVisualizer:
         
         amplitudes *= freq_weights
         
-        # 振幅缩放
-        amplitudes *= 0.7
+        # 振幅缩放（限制最大高度）
+        amplitudes *= config.MAX_HEIGHT_RATIO
         amplitudes = np.clip(amplitudes, 0, 1)
         
         # 平滑过渡（让变化更缓慢）
@@ -284,21 +498,54 @@ class AudioVisualizer:
         center_x = self.width // 2
         center_y = self.height // 2
         angles = np.linspace(0, 2 * np.pi, self.num_bars, endpoint=False)
+        length = int(amplitudes[0] * 300)
+        radius = config.CIRCLE_RADIUS + length
+        last_x2 = int(center_x + radius * np.cos(angles[0]))
+        last_y2 = int(center_y + radius * np.sin(angles[0]))
+        last_x3 = int(center_x + config.CIRCLE_RADIUS * np.cos(angles[0]) - length * np.cos(angles[0]))
+        last_y3 = int(center_y + config.CIRCLE_RADIUS * np.sin(angles[0]) - length * np.sin(angles[0]))
         
         for i, (amp, angle) in enumerate(zip(amplitudes, angles)):
-            radius = config.CIRCLE_RADIUS + int(amp * 300)
-            
+            length = int(amp * 300)
+            radius = config.CIRCLE_RADIUS + length
             x1 = int(center_x + config.CIRCLE_RADIUS * np.cos(angle))
             y1 = int(center_y + config.CIRCLE_RADIUS * np.sin(angle))
             x2 = int(center_x + radius * np.cos(angle))
             y2 = int(center_y + radius * np.sin(angle))
+            x3 = int(x1 - length * np.cos(angle))
+            y3 = int(y1 - length * np.sin(angle))
+            
+            # 在(x2, y2)上绘制圆点，参数控制点的大小
+            cv2.circle(frame, (x2, y2), 4, self.colors[i], -1)
             
             cv2.line(frame, (x1, y1), (x2, y2), self.colors[i], 
                     config.CIRCLE_LINE_WIDTH)
+            cv2.line(frame, (x1, y1), (x3, y3), self.colors[i], 
+                    config.CIRCLE_LINE_WIDTH)
+
+            if (i == 0):
+                length = int(amplitudes[-1] * 300)
+                radius = config.CIRCLE_RADIUS + length
+                x1_1 = int(center_x + radius * np.cos(angles[-1]))
+                y1_1 = int(center_y + radius * np.sin(angles[-1]))
+                cv2.line(frame, (x1_1, y1_1), (x2, y2), self.colors[i], 
+                        config.CIRCLE_LINE_WIDTH)
+                cv2.line(frame, (int(x1_1 - 2*length * np.cos(angles[-1])), int(y1_1 - 2*length * np.sin(angles[-1]))), (x3, y3), self.colors[i], 
+                        config.CIRCLE_LINE_WIDTH)
+
+            if (i != 0):
+                cv2.line(frame, (last_x2, last_y2), (x2, y2), self.colors[i], 
+                        config.CIRCLE_LINE_WIDTH)
+                cv2.line(frame, (last_x3, last_y3), (x3, y3), self.colors[i], 
+                        config.CIRCLE_LINE_WIDTH)
+                last_x2 = x2
+                last_y2 = y2
+                last_x3 = x3
+                last_y3 = y3
         
         # 绘制中心圆
-        cv2.circle(frame, (center_x, center_y), config.CIRCLE_RADIUS, 
-                  (100, 100, 100), 2)
+        # cv2.circle(frame, (center_x, center_y), config.CIRCLE_RADIUS, 
+        #           (100, 100, 100), 2)
     
     def _draw_wave(self, frame, amplitudes):
         """绘制波形频谱"""
@@ -381,6 +628,47 @@ class AudioVisualizer:
             self._draw_wave(frame, amplitudes)
         else:
             self._draw_bars(frame, amplitudes)
+        
+        # 粒子系统（根据频谱能量生成粒子）
+        if config.ENABLE_PARTICLES:
+            # 计算预测性同步的帧偏移
+            if config.PARTICLE_PREDICTION:
+                # 计算粒子到达圆上所需的时间（帧数）
+                travel_frames = int(config.CIRCLE_RADIUS / config.PARTICLE_SPEED)
+                # 获取未来帧的索引
+                future_frame_idx = frame_idx + travel_frames
+            else:
+                future_frame_idx = frame_idx
+            
+            # 获取未来帧的振幅（用于粒子生成）
+            future_amplitudes = self._get_frame_amplitudes(future_frame_idx)
+            
+            # 计算未来帧的总能量（使用平均值）
+            avg_energy = np.mean(future_amplitudes)
+            
+            # 在圆心位置生成粒子
+            center_x = self.width // 2
+            center_y = self.height // 2
+            
+            # 使用自适应阈值判断是否生成粒子
+            should_spawn, current_threshold = self.particle_system.update_adaptive_threshold(avg_energy)
+            
+            if should_spawn:
+                num_spawned = self.particle_system.spawn_particles(center_x, center_y, avg_energy)
+            else:
+                num_spawned = 0
+            
+            # 更新并绘制粒子
+            self.particle_system.update()
+            self.particle_system.draw(frame)
+            
+            # 调试：每100帧打印一次（可选，注释掉即可）
+            if int(t * self.config['fps']) % 100 == 0:
+                total = self.particle_system.get_count()
+                if config.PARTICLE_PREDICTION:
+                    print(f"新生成: {num_spawned}个, 屏幕总数: {total}个, 能量: {avg_energy:.3f}, 阈值: {current_threshold:.3f}, 提前: {travel_frames}帧")
+                else:
+                    print(f"新生成: {num_spawned}个, 屏幕总数: {total}个, 能量: {avg_energy:.3f}, 阈值: {current_threshold:.3f}")
         
         # 添加标题
         self._add_title(frame)
