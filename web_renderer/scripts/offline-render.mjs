@@ -7,6 +7,16 @@ import { fileURLToPath } from "node:url";
 
 import { chromium } from "playwright";
 
+const RENDER_CONTROL_KEYS = [
+  "particleSpeed",
+  "circleVibration",
+  "circleSpectrumGain",
+  "circleLineWidth",
+  "circleGlowStrength",
+  "circleSpacing",
+  "circleLineCount",
+];
+
 function parseArgs(argv) {
   const parsed = {};
   for (let i = 0; i < argv.length; i += 1) {
@@ -32,6 +42,61 @@ function requiredArg(args, key) {
     throw new Error(`缺少参数 --${key}`);
   }
   return value;
+}
+
+function isRecord(value) {
+  return typeof value === "object" && value !== null;
+}
+
+function parseRendererConfig(rawConfig) {
+  if (!isRecord(rawConfig)) {
+    return null;
+  }
+
+  const controlsSource = isRecord(rawConfig.controls) ? rawConfig.controls : rawConfig;
+  const controls = {};
+  for (const key of RENDER_CONTROL_KEYS) {
+    const value = controlsSource[key];
+    if (typeof value === "number" && Number.isFinite(value)) {
+      controls[key] = value;
+    }
+  }
+
+  const presetId = typeof rawConfig.presetId === "string" ? rawConfig.presetId : undefined;
+  const sceneId = typeof rawConfig.sceneId === "string" ? rawConfig.sceneId : undefined;
+  if (!presetId && !sceneId && Object.keys(controls).length === 0) {
+    return null;
+  }
+  return {
+    presetId,
+    sceneId,
+    controls,
+  };
+}
+
+function loadRendererConfig(projectRoot, args) {
+  const explicitPath = typeof args.controls === "string" ? args.controls : null;
+  const resolvedPath = explicitPath
+    ? path.resolve(projectRoot, explicitPath)
+    : path.resolve(projectRoot, "render-controls.json");
+
+  if (!existsSync(resolvedPath)) {
+    if (explicitPath) {
+      throw new Error(`渲染参数文件不存在: ${resolvedPath}`);
+    }
+    return null;
+  }
+
+  const raw = JSON.parse(readFileSync(resolvedPath, "utf-8"));
+  const config = parseRendererConfig(raw);
+  if (!config) {
+    throw new Error(`渲染参数文件格式无效: ${resolvedPath}`);
+  }
+
+  return {
+    path: resolvedPath,
+    config,
+  };
 }
 
 async function waitForServer(url, timeoutMs = 20_000) {
@@ -72,7 +137,8 @@ async function main() {
   const analysisPath = path.resolve(projectRoot, requiredArg(args, "analysis"));
   const audioPath = path.resolve(projectRoot, requiredArg(args, "audio"));
   const outputPath = path.resolve(projectRoot, requiredArg(args, "output"));
-  const scene = args.scene ?? "barsNeo";
+  const rendererConfig = loadRendererConfig(projectRoot, args);
+  const targetScene = args.scene ?? rendererConfig?.config.sceneId ?? "barsNeo";
   const fps = Number.parseInt(args.fps ?? "30", 10);
   const width = Number.parseInt(args.width ?? "1920", 10);
   const height = Number.parseInt(args.height ?? "1080", 10);
@@ -108,11 +174,18 @@ async function main() {
       waitUntil: "domcontentloaded",
     });
 
+    if (rendererConfig) {
+      process.stdout.write(`读取渲染参数: ${rendererConfig.path}\n`);
+      await page.evaluate((config) => {
+        window.dailyMusicOffline?.applyRendererConfig(config);
+      }, rendererConfig.config);
+    }
+
     await page.evaluate(
       ({ data, targetScene }) => {
         window.dailyMusicOffline?.loadAnalysisObject(data, targetScene);
       },
-      { data: analysis, targetScene: scene }
+      { data: analysis, targetScene }
     );
 
     const duration = await page.evaluate(() => window.dailyMusicOffline?.getDuration() ?? 0);

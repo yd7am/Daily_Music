@@ -117,6 +117,7 @@ python main.py pipeline \
   -i input/xxx.mp3 \
   --analysis-output output/analysis/xxx.analysis.json \
   -o output/xxx_web.mp4 \
+  --controls web_renderer/render-controls.json \
   --scene barsNeo \
   --fps 30 \
   --width 1920 \
@@ -130,6 +131,7 @@ python main.py render-web \
   --analysis output/analysis/xxx.analysis.json \
   --audio input/xxx.mp3 \
   -o output/xxx_web.mp4 \
+  --controls web_renderer/render-controls.json \
   --scene particleBurst
 ```
 
@@ -141,6 +143,10 @@ npm run dev
 ```
 
 打开浏览器后导入 `analysis.json` 和音频文件，即可切换场景与预设预览效果。
+
+- 滑杆、场景、预设会自动保存到浏览器本地存储，并在下次打开页面时恢复。
+- 可在页面中点击「导出参数」生成 `render-controls.json`，离线导出时用 `--controls` 复用同一套参数。
+- 若 `web_renderer/render-controls.json` 存在且本地存储为空，页面初始化会自动读取该文件。
 
 ## analysis.json 协议
 

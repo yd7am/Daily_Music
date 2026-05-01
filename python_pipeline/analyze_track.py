@@ -32,14 +32,27 @@ def export_analysis(
     analysis_fps: float = config.VIDEO_FPS,
     bands: int = config.NUM_BARS,
     include_segments: bool = True,
+    sample_rate: int | None = None,
+    hop_length: int | None = None,
+    fft_size: int | None = None,
+    low_memory: bool = True,
 ) -> Dict[str, Any]:
+    if low_memory:
+        resolved_sample_rate = sample_rate or min(config.SAMPLE_RATE, 22050)
+        resolved_hop_length = hop_length or max(config.HOP_LENGTH, 512)
+        resolved_fft_size = fft_size or min(config.N_FFT, 2048)
+    else:
+        resolved_sample_rate = sample_rate or config.SAMPLE_RATE
+        resolved_hop_length = hop_length or config.HOP_LENGTH
+        resolved_fft_size = fft_size or config.N_FFT
+
     extractor = AudioFeatureExtractor(
         audio_path=input_path,
         analysis_fps=analysis_fps,
         bands=bands,
-        sample_rate=config.SAMPLE_RATE,
-        hop_length=config.HOP_LENGTH,
-        fft_size=config.N_FFT,
+        sample_rate=resolved_sample_rate,
+        hop_length=resolved_hop_length,
+        fft_size=resolved_fft_size,
     )
     analysis = extractor.build_analysis(include_segments=include_segments)
     payload = analysis.to_dict()
@@ -56,6 +69,10 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("-o", "--output", required=True, help="输出 analysis.json 文件路径")
     parser.add_argument("--analysis-fps", type=float, default=config.VIDEO_FPS, help="分析采样帧率")
     parser.add_argument("--bands", type=int, default=config.NUM_BARS, help="频谱分组数量")
+    parser.add_argument("--sample-rate", type=int, default=None, help="分析采样率（默认低内存模式自动选择）")
+    parser.add_argument("--hop-length", type=int, default=None, help="STFT hop_length（默认低内存模式自动选择）")
+    parser.add_argument("--n-fft", type=int, default=None, help="STFT N_FFT（默认低内存模式自动选择）")
+    parser.add_argument("--no-low-memory", action="store_true", help="关闭低内存模式，使用原始默认参数")
     parser.add_argument("--no-segments", action="store_true", help="禁用自动分段")
     return parser.parse_args()
 
@@ -72,6 +89,10 @@ def main() -> None:
         analysis_fps=args.analysis_fps,
         bands=args.bands,
         include_segments=not args.no_segments,
+        sample_rate=args.sample_rate,
+        hop_length=args.hop_length,
+        fft_size=args.n_fft,
+        low_memory=not args.no_low_memory,
     )
 
     frame_count = len(payload.get("frames", []))

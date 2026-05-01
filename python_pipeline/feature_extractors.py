@@ -4,8 +4,12 @@ Feature extraction utilities for analysis.json export.
 
 from __future__ import annotations
 
+import os
 from datetime import datetime, timezone
 from typing import Dict, List, Sequence
+
+# Use a writable cache directory in WSL/mounted setups.
+os.environ.setdefault("NUMBA_CACHE_DIR", "/tmp/numba-cache")
 
 import librosa
 import numpy as np
@@ -21,18 +25,18 @@ from python_pipeline.analysis_schema import (
 
 
 def _safe_normalize(values: np.ndarray) -> np.ndarray:
-    values = np.asarray(values, dtype=float)
+    values = np.asarray(values, dtype=np.float32)
     max_val = float(np.max(values)) if values.size else 0.0
     if max_val <= 0:
-        return np.zeros_like(values, dtype=float)
+        return np.zeros_like(values, dtype=np.float32)
     return values / max_val
 
 
 def _moving_average(values: Sequence[float], window: int) -> np.ndarray:
-    arr = np.asarray(values, dtype=float)
+    arr = np.asarray(values, dtype=np.float32)
     if arr.size == 0 or window <= 1:
         return arr
-    kernel = np.ones(window, dtype=float) / float(window)
+    kernel = np.ones(window, dtype=np.float32) / float(window)
     return np.convolve(arr, kernel, mode="same")
 
 
@@ -56,6 +60,7 @@ class AudioFeatureExtractor:
         self.fft_size = fft_size
 
         self.audio, self.sr = librosa.load(audio_path, sr=sample_rate)
+        self.audio = self.audio.astype(np.float32, copy=False)
         self.duration = len(self.audio) / float(self.sr)
 
         self.stft = np.abs(
@@ -64,8 +69,8 @@ class AudioFeatureExtractor:
                 n_fft=self.fft_size,
                 hop_length=self.hop_length,
             )
-        )
-        self.db = librosa.amplitude_to_db(self.stft, ref=np.max)
+        ).astype(np.float32, copy=False)
+        self.db = librosa.amplitude_to_db(self.stft, ref=np.max).astype(np.float32, copy=False)
         self.frame_count = self.db.shape[1]
 
         freqs = librosa.fft_frequencies(sr=self.sr, n_fft=self.fft_size)
@@ -105,7 +110,7 @@ class AudioFeatureExtractor:
         return np.array(bins)
 
     def _compute_freq_weights(self) -> np.ndarray:
-        weights = np.ones(self.bands, dtype=float)
+        weights = np.ones(self.bands, dtype=np.float32)
         for i in range(self.bands):
             ratio = i / max(1, self.bands - 1)
             if ratio < 0.3:
@@ -130,7 +135,7 @@ class AudioFeatureExtractor:
             amp = float(np.mean(chunk)) if chunk.size else float(config.NOISE_GATE)
             amplitudes.append(amp)
 
-        spectrum = np.array(amplitudes, dtype=float)
+        spectrum = np.array(amplitudes, dtype=np.float32)
         spectrum = np.where(spectrum < config.NOISE_GATE, config.NOISE_GATE, spectrum)
         spectrum = np.clip(spectrum, config.NOISE_GATE, 0)
         spectrum = (spectrum - config.NOISE_GATE) / (0 - config.NOISE_GATE)
@@ -153,14 +158,21 @@ class AudioFeatureExtractor:
             y=self.audio, sr=self.sr, n_fft=self.fft_size, hop_length=self.hop_length
         )[0]
 
-        flux = np.sqrt(np.sum(np.diff(self.stft, axis=1, prepend=self.stft[:, :1]) ** 2, axis=0))
+        flux_diff = np.diff(self.stft, axis=1, prepend=self.stft[:, :1])
+        flux = np.sqrt(np.sum(flux_diff * flux_diff, axis=0, dtype=np.float32)).astype(np.float32, copy=False)
         flux = _safe_normalize(flux)
 
-        _, beat_frames = librosa.beat.beat_track(y=self.audio, sr=self.sr, hop_length=self.hop_length)
-        beat_track = np.zeros(self.frame_count, dtype=float)
-        beat_indices = np.asarray(beat_frames, dtype=int)
-        beat_indices = beat_indices[(beat_indices >= 0) & (beat_indices < self.frame_count)]
-        beat_track[beat_indices] = 1.0
+        onset_norm = _safe_normalize(onset)
+        beat_track = np.zeros(self.frame_count, dtype=np.float32)
+        if onset_norm.size >= 3:
+            threshold = float(np.percentile(onset_norm, 85))
+            peaks = np.where(
+                (onset_norm[1:-1] > onset_norm[:-2])
+                & (onset_norm[1:-1] > onset_norm[2:])
+                & (onset_norm[1:-1] >= threshold)
+            )[0] + 1
+            peaks = peaks[(peaks >= 0) & (peaks < self.frame_count)]
+            beat_track[peaks] = 1.0
 
         return {
             "rms": _safe_normalize(rms),

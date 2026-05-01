@@ -48,6 +48,10 @@ body {
 .row label {
   font-size: 13px;
   color: #c9d0ff;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
 }
 
 .row input,
@@ -74,6 +78,11 @@ body {
   margin-top: 14px;
   color: #86f1c8;
   font-size: 12px;
+}
+
+.inline-value {
+  font-size: 12px;
+  color: #8fdcff;
 }
 
 .stage {
