@@ -1,0 +1,32 @@
+[
+  {
+    "id": "edm",
+    "label": "EDM 爆发",
+    "defaultSceneId": "particleBurst",
+    "glowScale": 1.25,
+    "beatThreshold": 0.42,
+    "onsetThreshold": 0.4,
+    "hueDrift": 1.2,
+    "particleGain": 1.4
+  },
+  {
+    "id": "pop",
+    "label": "流行平衡",
+    "defaultSceneId": "barsNeo",
+    "glowScale": 1,
+    "beatThreshold": 0.5,
+    "onsetThreshold": 0.5,
+    "hueDrift": 1,
+    "particleGain": 1
+  },
+  {
+    "id": "ambient",
+    "label": "氛围柔和",
+    "defaultSceneId": "circlePulse",
+    "glowScale": 0.65,
+    "beatThreshold": 0.58,
+    "onsetThreshold": 0.62,
+    "hueDrift": 0.55,
+    "particleGain": 0.45
+  }
+]

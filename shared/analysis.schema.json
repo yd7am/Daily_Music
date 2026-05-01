@@ -1,0 +1,174 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://daily-music.local/schemas/analysis.schema.json",
+  "title": "Daily Music Analysis Data",
+  "description": "Frame-level audio features used by the web renderer and offline exporter.",
+  "type": "object",
+  "required": [
+    "meta",
+    "frames"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "meta": {
+      "type": "object",
+      "required": [
+        "version",
+        "sourceAudio",
+        "sampleRate",
+        "duration",
+        "analysisFps",
+        "bands",
+        "hopLength",
+        "fftSize",
+        "generatedAt"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "version": {
+          "type": "string",
+          "description": "Schema and feature extraction version."
+        },
+        "sourceAudio": {
+          "type": "string",
+          "description": "Input audio path used to generate this analysis."
+        },
+        "sampleRate": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "duration": {
+          "type": "number",
+          "minimum": 0
+        },
+        "analysisFps": {
+          "type": "number",
+          "minimum": 1
+        },
+        "bands": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "hopLength": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "fftSize": {
+          "type": "integer",
+          "minimum": 2
+        },
+        "generatedAt": {
+          "type": "string",
+          "description": "ISO timestamp when this file was generated."
+        },
+        "configSnapshot": {
+          "type": "object",
+          "description": "Optional subset of config values used in extraction.",
+          "additionalProperties": true
+        }
+      }
+    },
+    "frames": {
+      "type": "array",
+      "description": "Time-indexed features sampled at analysisFps.",
+      "items": {
+        "type": "object",
+        "required": [
+          "t",
+          "spectrum",
+          "rms",
+          "onset",
+          "beat",
+          "centroid",
+          "energy"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "t": {
+            "type": "number",
+            "minimum": 0
+          },
+          "spectrum": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            }
+          },
+          "rms": {
+            "type": "number",
+            "minimum": 0
+          },
+          "onset": {
+            "type": "number",
+            "minimum": 0
+          },
+          "beat": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1
+          },
+          "centroid": {
+            "type": "number",
+            "minimum": 0
+          },
+          "energy": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1
+          },
+          "flux": {
+            "type": "number",
+            "minimum": 0
+          },
+          "rolloff": {
+            "type": "number",
+            "minimum": 0
+          }
+        }
+      }
+    },
+    "segments": {
+      "type": "array",
+      "description": "Optional coarse sections for scene switching.",
+      "items": {
+        "type": "object",
+        "required": [
+          "start",
+          "end",
+          "label"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "start": {
+            "type": "number",
+            "minimum": 0
+          },
+          "end": {
+            "type": "number",
+            "minimum": 0
+          },
+          "label": {
+            "type": "string",
+            "enum": [
+              "intro",
+              "verse",
+              "build",
+              "drop",
+              "breakdown",
+              "outro",
+              "custom"
+            ]
+          },
+          "intensity": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1
+          }
+        }
+      }
+    }
+  }
+}

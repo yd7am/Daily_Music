@@ -49,6 +49,14 @@ input/*.aac
 output/*.mp4
 output/*.avi
 output/*.mov
+output/analysis/*.json
+
+# Web 渲染构建产物
+web_renderer/node_modules/
+web_renderer/dist/
+web_renderer/.vite/
+web_renderer/playwright-report/
+web_renderer/test-results/
 
 # 临时文件
 *.tmp

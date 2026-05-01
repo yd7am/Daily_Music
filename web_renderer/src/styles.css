@@ -1,0 +1,129 @@
+:root {
+  color-scheme: dark;
+  font-family: "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+  background: #090c16;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: radial-gradient(circle at top, #141b31, #070910 65%);
+  color: #f2f4ff;
+}
+
+.layout {
+  display: grid;
+  grid-template-columns: 360px 1fr;
+  min-height: 100vh;
+}
+
+.panel {
+  padding: 20px 18px;
+  border-right: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(8, 11, 22, 0.88);
+  backdrop-filter: blur(8px);
+}
+
+.panel h1 {
+  margin: 0;
+  font-size: 20px;
+}
+
+.hint {
+  margin: 8px 0 18px;
+  color: #a7afd6;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.row {
+  display: grid;
+  gap: 6px;
+  margin-bottom: 14px;
+}
+
+.row label {
+  font-size: 13px;
+  color: #c9d0ff;
+}
+
+.row input,
+.row select,
+.toolbar button {
+  width: 100%;
+  border: 1px solid rgba(169, 183, 255, 0.35);
+  border-radius: 8px;
+  background: #111731;
+  color: #f6f7ff;
+  padding: 8px 10px;
+}
+
+.toolbar {
+  display: flex;
+  gap: 10px;
+}
+
+.toolbar button {
+  cursor: pointer;
+}
+
+.status {
+  margin-top: 14px;
+  color: #86f1c8;
+  font-size: 12px;
+}
+
+.stage {
+  padding: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+#renderCanvas {
+  width: min(100%, 1280px);
+  aspect-ratio: 16 / 9;
+  border-radius: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  box-shadow: 0 18px 60px rgba(0, 0, 0, 0.42);
+  background: #04060f;
+}
+
+audio {
+  display: none;
+}
+
+@media (max-width: 1100px) {
+  .layout {
+    grid-template-columns: 1fr;
+  }
+
+  .panel {
+    border-right: 0;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+  }
+}
+
+body.offline-mode .panel {
+  display: none;
+}
+
+body.offline-mode .layout {
+  grid-template-columns: 1fr;
+}
+
+body.offline-mode .stage {
+  padding: 0;
+}
+
+body.offline-mode #renderCanvas {
+  border-radius: 0;
+  border: 0;
+  box-shadow: none;
+  width: 100vw;
+  height: 100vh;
+  aspect-ratio: auto;
+}

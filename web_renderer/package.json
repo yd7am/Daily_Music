@@ -1,0 +1,21 @@
+{
+  "name": "daily-music-web-renderer",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "render:offline": "node ./scripts/offline-render.mjs"
+  },
+  "dependencies": {
+    "gsap": "^3.13.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.19",
+    "playwright": "^1.53.0",
+    "typescript": "^5.8.3",
+    "vite": "^5.4.14"
+  }
+}
