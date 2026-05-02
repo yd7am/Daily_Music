@@ -279,6 +279,31 @@ async function main() {
       },
       { data: analysis, targetScene }
     );
+    await page.evaluate(async () => {
+      if (!("fonts" in document) || !document.fonts) {
+        return;
+      }
+      const families = [
+        '"Patrick Hand"',
+        '"Caveat"',
+        '"Kalam"',
+        '"Indie Flower"',
+        '"Amatic SC"',
+        '"Orbitron"',
+        '"Audiowide"',
+        '"Noto Sans JP"',
+        '"M PLUS Rounded 1c"',
+        '"Zen Maru Gothic"',
+        '"Kosugi Maru"',
+        '"Sawarabi Gothic"',
+        '"Shippori Mincho"',
+      ];
+      await Promise.allSettled(families.map((family) => document.fonts.load(`700 40px ${family}`)));
+      await document.fonts.ready;
+    });
+    await page.evaluate(() => {
+      window.dailyMusicOffline?.seekAndRender(0);
+    });
 
     const sourceDuration = await page.evaluate(() => window.dailyMusicOffline?.getDuration() ?? 0);
     const renderDuration = maxSeconds === null ? sourceDuration : Math.min(sourceDuration, maxSeconds);
