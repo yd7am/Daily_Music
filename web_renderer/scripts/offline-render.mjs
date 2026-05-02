@@ -13,6 +13,8 @@ const RENDER_CONTROL_KEYS = [
   "particleSeed",
   "particleShardDensity",
   "particle3DRotation",
+  "subtitleSize",
+  "circleCoverScale",
   "circleHudGap",
   "circleVibration",
   "circleSpectrumGain",

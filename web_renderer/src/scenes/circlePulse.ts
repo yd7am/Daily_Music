@@ -4,6 +4,7 @@ import { getSubtitleFontFamily } from "../core/subtitle-overlay";
 import { getSubtitleFrameAt } from "../core/subtitle-track";
 import { getTrackFontFamily, getTrackOverlayInfo } from "../core/track-overlay";
 import type { AnalysisData } from "../types/analysis";
+import badAppleCoverUrl from "../../../assets/badApple.png";
 
 let barCount = 0;
 let lastEmitT = -1;
@@ -24,6 +25,60 @@ interface PulseParticle {
 
 const pulseParticles: PulseParticle[] = [];
 const SUBTITLE_FADE_DURATION_MS = 250;
+const COVER_ROTATION_SPEED = 0.08;
+
+const coverImage = new Image();
+let coverImageReady = false;
+let coverImageFailed = false;
+coverImage.decoding = "async";
+coverImage.onload = () => {
+  coverImageReady = true;
+  coverImageFailed = false;
+};
+coverImage.onerror = () => {
+  coverImageReady = false;
+  coverImageFailed = true;
+};
+coverImage.src = badAppleCoverUrl;
+
+function drawCenterCover(
+  ctx: CanvasRenderingContext2D,
+  cx: number,
+  cy: number,
+  baseRadius: number,
+  coverScale: number,
+  rotationRad: number
+): void {
+  if (!coverImageReady || coverImageFailed) {
+    return;
+  }
+
+  const coverRadius = baseRadius * coverScale;
+  const diameter = coverRadius * 2;
+  const sourceSize = Math.max(1, Math.min(coverImage.naturalWidth, coverImage.naturalHeight));
+  const sx = Math.max(0, (coverImage.naturalWidth - sourceSize) * 0.5);
+  const sy = Math.max(0, (coverImage.naturalHeight - sourceSize) * 0.5);
+
+  ctx.save();
+  ctx.translate(cx, cy);
+  ctx.rotate(rotationRad);
+  ctx.beginPath();
+  ctx.arc(0, 0, coverRadius, 0, Math.PI * 2);
+  ctx.closePath();
+  ctx.clip();
+  ctx.drawImage(coverImage, sx, sy, sourceSize, sourceSize, -coverRadius, -coverRadius, diameter, diameter);
+  ctx.restore();
+
+  ctx.save();
+  ctx.translate(cx, cy);
+  ctx.rotate(rotationRad);
+  ctx.strokeStyle = "rgba(236, 245, 255, 0.85)";
+  ctx.lineWidth = 1.6;
+  ctx.beginPath();
+  ctx.arc(0, 0, coverRadius + 0.8, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.restore();
+}
 
 function formatClock(seconds: number): string {
   if (!Number.isFinite(seconds) || seconds < 0) {
@@ -44,6 +99,7 @@ function drawPlaybackHud(
   hudGap: number,
   progress: number,
   currentTimeSec: number,
+  subtitleSizeScale: number,
   glowStrength: number
 ): void {
   const trackInfo = getTrackOverlayInfo();
@@ -59,7 +115,8 @@ function drawPlaybackHud(
   const titleFontSize = Math.max(22, Math.round(width * 0.028));
   const artistFontSize = Math.max(20, Math.round(width * 0.024));
   const timeFontSize = Math.max(16, Math.round(width * 0.018));
-  const subtitleFontSize = Math.min(44, Math.max(22, Math.round(width * 0.026)));
+  const baseSubtitleSize = Math.min(44, Math.max(22, Math.round(width * 0.026)));
+  const subtitleFontSize = Math.min(84, Math.max(14, baseSubtitleSize * subtitleSizeScale));
   const clampedProgress = Math.max(0, Math.min(1, progress));
   const cursorX = hudX + hudWidth * clampedProgress;
 
@@ -203,6 +260,9 @@ export const circlePulseScene: SceneDefinition = {
     const glowStrength = controls.circleGlowStrength;
     const baseRadius = Math.min(width, height) * 0.22;
     const pulseRadius = baseRadius + frame.energy * (120 * vibration) + state.pulse * (36 * vibration);
+    const rotationRad = rc.now * COVER_ROTATION_SPEED;
+
+    drawCenterCover(ctx, cx, cy, baseRadius, controls.circleCoverScale, rotationRad);
 
     const spectrum = frame.spectrum;
     const sourceCount = Math.max(1, Math.min(spectrum.length, barCount || spectrum.length));
@@ -214,7 +274,7 @@ export const circlePulseScene: SceneDefinition = {
 
     ctx.save();
     ctx.translate(cx, cy);
-    ctx.rotate(rc.now * 0.08);
+    ctx.rotate(rotationRad);
     ctx.lineCap = "round";
 
     const spectralAura = ctx.createRadialGradient(0, 0, pulseRadius * 0.82, 0, 0, pulseRadius * 1.48);
@@ -383,6 +443,7 @@ export const circlePulseScene: SceneDefinition = {
       controls.circleHudGap,
       rc.progress,
       frame.t,
+      controls.subtitleSize,
       glowStrength
     );
   },
