@@ -1,5 +1,6 @@
 import { spawn } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { once } from "node:events";
+import { createWriteStream, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import process from "node:process";
@@ -174,6 +175,23 @@ function spawnCommand(command, args, options = {}) {
   });
 }
 
+async function stopChildProcess(child, gracefulTimeoutMs = 2500) {
+  if (!child || child.exitCode !== null) {
+    return;
+  }
+  child.kill("SIGTERM");
+  const graceful = Promise.race([
+    once(child, "close"),
+    new Promise((resolve) => setTimeout(resolve, gracefulTimeoutMs)),
+  ]);
+  await graceful;
+  if (child.exitCode !== null) {
+    return;
+  }
+  child.kill("SIGKILL");
+  await once(child, "close");
+}
+
 function formatDuration(totalSeconds) {
   if (!Number.isFinite(totalSeconds) || totalSeconds < 0) {
     return "--:--";
@@ -203,6 +221,14 @@ async function main() {
   const height = Number.parseInt(args.height ?? "1080", 10);
   const port = Number.parseInt(args.port ?? "4173", 10);
   const keepFrames = args.keepFrames === "true";
+  const maxSecondsArg = args["max-seconds"];
+  const maxSeconds =
+    typeof maxSecondsArg === "string" && Number.isFinite(Number.parseFloat(maxSecondsArg))
+      ? Number.parseFloat(maxSecondsArg)
+      : null;
+  if (maxSeconds !== null && maxSeconds <= 0) {
+    throw new Error("--max-seconds 必须大于 0");
+  }
 
   if (!existsSync(analysisPath)) {
     throw new Error(`analysis 文件不存在: ${analysisPath}`);
@@ -215,20 +241,27 @@ async function main() {
   mkdirSync(outputDir, { recursive: true });
   const frameDir = mkdtempSync(path.join(tmpdir(), "daily-music-frames-"));
 
-  const npxCommand = process.platform === "win32" ? "npx.cmd" : "npx";
-  const viteProc = spawn(npxCommand, ["vite", "--host", "127.0.0.1", "--port", String(port)], {
+  const viteBin =
+    process.platform === "win32"
+      ? path.join(projectRoot, "node_modules", ".bin", "vite.cmd")
+      : path.join(projectRoot, "node_modules", ".bin", "vite");
+  const viteProc = spawn(viteBin, ["--host", "127.0.0.1", "--port", String(port)], {
     cwd: projectRoot,
     stdio: "pipe",
   });
 
+  const exportMode = args["export-mode"] === "realtime" ? "realtime" : "frame";
   let browser = null;
+  let page = null;
   try {
     const baseUrl = `http://127.0.0.1:${port}`;
     await waitForServer(baseUrl);
 
     const analysis = JSON.parse(readFileSync(analysisPath, "utf-8"));
-    browser = await chromium.launch({ headless: true });
-    const page = await browser.newPage({ viewport: { width, height } });
+    browser = await chromium.launch(
+      exportMode === "realtime" ? { headless: true, channel: "chromium" } : { headless: true }
+    );
+    page = await browser.newPage({ viewport: { width, height } });
     await page.goto(`${baseUrl}/?offline=1&width=${width}&height=${height}`, {
       waitUntil: "domcontentloaded",
     });
@@ -247,73 +280,253 @@ async function main() {
       { data: analysis, targetScene }
     );
 
-    const duration = await page.evaluate(() => window.dailyMusicOffline?.getDuration() ?? 0);
-    const totalFrames = Math.max(1, Math.ceil(duration * fps));
-    const canvas = page.locator("#renderCanvas");
+    const sourceDuration = await page.evaluate(() => window.dailyMusicOffline?.getDuration() ?? 0);
+    const renderDuration = maxSeconds === null ? sourceDuration : Math.min(sourceDuration, maxSeconds);
+    const totalFrames = Math.max(1, Math.ceil(renderDuration * fps));
     const renderStartTimeMs = Date.now();
     let lastProgressLogTimeMs = 0;
     let lastProgressPercentBucket = -1;
 
-    process.stdout.write(
-      `开始逐帧渲染: duration=${duration.toFixed(3)}s, totalFrames=${totalFrames}, output=${width}x${height}@${fps}fps\n`
-    );
-
-    for (let i = 0; i < totalFrames; i += 1) {
-      const t = i / fps;
-      await page.evaluate((time) => {
-        window.dailyMusicOffline?.seek(time);
-      }, t);
-      await page.waitForTimeout(18);
-      const framePath = path.join(frameDir, `frame_${String(i).padStart(6, "0")}.png`);
-      await canvas.screenshot({ path: framePath });
-
-      const completedFrames = i + 1;
-      const progressRatio = completedFrames / totalFrames;
-      const progressPercent = progressRatio * 100;
-      const progressPercentBucket = Math.floor(progressPercent);
-      const nowMs = Date.now();
-      const elapsedSec = Math.max(0.001, (nowMs - renderStartTimeMs) / 1000);
-      const renderFps = completedFrames / elapsedSec;
-      const remainingFrames = Math.max(0, totalFrames - completedFrames);
-      const etaSec = renderFps > 0 ? remainingFrames / renderFps : Infinity;
-      const shouldLog =
-        completedFrames === 1 ||
-        completedFrames === totalFrames ||
-        progressPercentBucket > lastProgressPercentBucket ||
-        nowMs - lastProgressLogTimeMs >= 2000;
-
-      if (shouldLog) {
-        process.stdout.write(
-          `渲染进度 ${progressPercent.toFixed(1)}% (${completedFrames}/${totalFrames}) | 速度 ${renderFps.toFixed(
-            2
-          )} 帧/s | 已耗时 ${formatDuration(elapsedSec)} | 预计剩余 ${formatDuration(etaSec)}\n`
-        );
-        lastProgressLogTimeMs = nowMs;
-        lastProgressPercentBucket = progressPercentBucket;
-      }
+    if (maxSeconds !== null) {
+      process.stdout.write(
+        `Quick Check 模式启用: source=${sourceDuration.toFixed(3)}s, render=${renderDuration.toFixed(3)}s\n`
+      );
     }
 
-    process.stdout.write("逐帧渲染完成，开始调用 ffmpeg 合成 MP4...\n");
-    await spawnCommand(
-      "ffmpeg",
-      [
-        "-y",
+    let videoInputArgs = [];
+    if (exportMode === "realtime") {
+      process.stdout.write(
+        `开始实时录制: duration=${renderDuration.toFixed(3)}s, output=${width}x${height}@${fps}fps\n`
+      );
+      const realtimeCapturePath = path.join(frameDir, "realtime_capture.webm");
+      const realtimeWriter = createWriteStream(realtimeCapturePath, { flags: "w" });
+      let writeQueue = Promise.resolve();
+      let captureBytes = 0;
+
+      await page.exposeFunction("__offlineWriteChunk", async (base64Chunk) => {
+        if (typeof base64Chunk !== "string" || base64Chunk.length === 0) {
+          return;
+        }
+        const chunk = Buffer.from(base64Chunk, "base64");
+        captureBytes += chunk.length;
+        writeQueue = writeQueue.then(
+          () =>
+            new Promise((resolve, reject) => {
+              realtimeWriter.write(chunk, (error) => {
+                if (error) {
+                  reject(error);
+                } else {
+                  resolve(undefined);
+                }
+              });
+            })
+        );
+        await writeQueue;
+      });
+
+      const captureBitrate = Math.max(8_000_000, Math.min(28_000_000, Math.round(width * height * fps * 0.25)));
+      await page.evaluate(
+        ({ fps, captureBitrate }) => {
+          const runtime = window;
+          const canvas = document.querySelector("#renderCanvas");
+          if (!(canvas instanceof HTMLCanvasElement)) {
+            throw new Error("离线录制失败：找不到 #renderCanvas");
+          }
+          const stream = canvas.captureStream(fps);
+          const mimeType = MediaRecorder.isTypeSupported("video/webm;codecs=vp9")
+            ? "video/webm;codecs=vp9"
+            : MediaRecorder.isTypeSupported("video/webm;codecs=vp8")
+              ? "video/webm;codecs=vp8"
+              : "video/webm";
+          const recorder = new MediaRecorder(stream, {
+            mimeType,
+            videoBitsPerSecond: captureBitrate,
+          });
+          const pendingWrites = [];
+          let stopResolve = () => {};
+          let stopReject = () => {};
+          const done = new Promise((resolve, reject) => {
+            stopResolve = resolve;
+            stopReject = reject;
+          });
+
+          recorder.ondataavailable = (event) => {
+            if (!event.data || event.data.size === 0) {
+              return;
+            }
+            const task = (async () => {
+              const buffer = await event.data.arrayBuffer();
+              const bytes = new Uint8Array(buffer);
+              let binary = "";
+              const chunkSize = 0x8000;
+              for (let index = 0; index < bytes.length; index += chunkSize) {
+                binary += String.fromCharCode(...bytes.subarray(index, index + chunkSize));
+              }
+              await runtime.__offlineWriteChunk(btoa(binary));
+            })();
+            pendingWrites.push(task);
+          };
+          recorder.onerror = (event) => {
+            stopReject(new Error(event.error?.message ?? "MediaRecorder 录制失败"));
+          };
+          recorder.onstop = () => {
+            Promise.all(pendingWrites)
+              .then(() => stopResolve(undefined))
+              .catch((error) => stopReject(error instanceof Error ? error : new Error(String(error))));
+          };
+
+          runtime.dailyMusicOffline?.seekAndRender(0);
+          recorder.start(250);
+          runtime.dailyMusicOffline?.startRealtimePlayback(0);
+          runtime.__offlineRealtimeRecorder = { recorder, done };
+        },
+        { fps, captureBitrate }
+      );
+
+      while (true) {
+        const elapsedSec = Math.max(0.001, (Date.now() - renderStartTimeMs) / 1000);
+        const clampedElapsedSec = Math.min(renderDuration, elapsedSec);
+        const completedFrames = Math.min(totalFrames, Math.max(1, Math.round(clampedElapsedSec * fps)));
+        const progressRatio = Math.min(1, clampedElapsedSec / renderDuration);
+        const progressPercent = progressRatio * 100;
+        const progressPercentBucket = Math.floor(progressPercent);
+        const captureFps = completedFrames / elapsedSec;
+        const etaSec = Math.max(0, renderDuration - clampedElapsedSec);
+        const shouldLog =
+          completedFrames === 1 ||
+          progressRatio >= 1 ||
+          progressPercentBucket > lastProgressPercentBucket ||
+          Date.now() - lastProgressLogTimeMs >= 2000;
+
+        if (shouldLog) {
+          process.stdout.write(
+            `录制进度 ${progressPercent.toFixed(1)}% (${completedFrames}/${totalFrames}) | 速度 ${captureFps.toFixed(
+              2
+            )} 帧/s | 已耗时 ${formatDuration(elapsedSec)} | 预计剩余 ${formatDuration(etaSec)}\n`
+          );
+          lastProgressLogTimeMs = Date.now();
+          lastProgressPercentBucket = progressPercentBucket;
+        }
+
+        if (progressRatio >= 1) {
+          break;
+        }
+        await page.waitForTimeout(200);
+      }
+
+      await page.evaluate(async () => {
+        const runtime = window;
+        const recorderState = runtime.__offlineRealtimeRecorder;
+        if (!recorderState) {
+          return;
+        }
+        runtime.dailyMusicOffline?.stopRealtimePlayback();
+        recorderState.recorder.stop();
+        await recorderState.done;
+        delete runtime.__offlineRealtimeRecorder;
+      });
+      await writeQueue;
+      await new Promise((resolve, reject) => {
+        realtimeWriter.end((error) => {
+          if (error) {
+            reject(error);
+          } else {
+            resolve(undefined);
+          }
+        });
+      });
+
+      process.stdout.write(`实时录制数据写入完成: ${(captureBytes / (1024 * 1024)).toFixed(2)} MiB\n`);
+      videoInputArgs = ["-i", realtimeCapturePath];
+      process.stdout.write("实时录制完成，开始调用 ffmpeg 合成 MP4...\n");
+    } else {
+      const canvas = page.locator("#renderCanvas");
+      process.stdout.write(
+        `开始逐帧渲染: duration=${renderDuration.toFixed(3)}s, totalFrames=${totalFrames}, output=${width}x${height}@${fps}fps\n`
+      );
+
+      for (let i = 0; i < totalFrames; i += 1) {
+        const t = i / fps;
+        const renderedImmediately = await page.evaluate((time) => {
+          const bridge = window.dailyMusicOffline;
+          if (!bridge) {
+            return false;
+          }
+          if (typeof bridge.seekAndRender === "function") {
+            bridge.seekAndRender(time);
+            return true;
+          }
+          bridge.seek(time);
+          return false;
+        }, t);
+        if (!renderedImmediately) {
+          await page.waitForTimeout(18);
+        }
+        const framePath = path.join(frameDir, `frame_${String(i).padStart(6, "0")}.png`);
+        await canvas.screenshot({ path: framePath });
+
+        const completedFrames = i + 1;
+        const progressRatio = completedFrames / totalFrames;
+        const progressPercent = progressRatio * 100;
+        const progressPercentBucket = Math.floor(progressPercent);
+        const nowMs = Date.now();
+        const elapsedSec = Math.max(0.001, (nowMs - renderStartTimeMs) / 1000);
+        const renderFps = completedFrames / elapsedSec;
+        const remainingFrames = Math.max(0, totalFrames - completedFrames);
+        const etaSec = renderFps > 0 ? remainingFrames / renderFps : Infinity;
+        const shouldLog =
+          completedFrames === 1 ||
+          completedFrames === totalFrames ||
+          progressPercentBucket > lastProgressPercentBucket ||
+          nowMs - lastProgressLogTimeMs >= 2000;
+
+        if (shouldLog) {
+          process.stdout.write(
+            `渲染进度 ${progressPercent.toFixed(1)}% (${completedFrames}/${totalFrames}) | 速度 ${renderFps.toFixed(
+              2
+            )} 帧/s | 已耗时 ${formatDuration(elapsedSec)} | 预计剩余 ${formatDuration(etaSec)}\n`
+          );
+          lastProgressLogTimeMs = nowMs;
+          lastProgressPercentBucket = progressPercentBucket;
+        }
+      }
+      process.stdout.write("逐帧渲染完成，开始调用 ffmpeg 合成 MP4...\n");
+      videoInputArgs = [
         "-framerate",
         String(fps),
         "-start_number",
         "0",
         "-i",
         path.join(frameDir, "frame_%06d.png"),
+      ];
+    }
+
+    const videoPreset = exportMode === "realtime" ? "slow" : "medium";
+    const videoCrf = exportMode === "realtime" ? "18" : "20";
+
+    await spawnCommand(
+      "ffmpeg",
+      [
+        "-y",
+        ...videoInputArgs,
         "-i",
         audioPath,
+        "-t",
+        renderDuration.toFixed(3),
         "-c:v",
         "libx264",
         "-preset",
-        "medium",
+        videoPreset,
+        "-crf",
+        videoCrf,
+        "-r",
+        String(fps),
         "-pix_fmt",
         "yuv420p",
         "-c:a",
         "aac",
+        "-movflags",
+        "+faststart",
         "-shortest",
         outputPath,
       ],
@@ -322,10 +535,13 @@ async function main() {
 
     process.stdout.write(`离线导出完成: ${outputPath}\n`);
   } finally {
-    if (browser) {
-      await browser.close();
+    if (page) {
+      await page.close().catch(() => {});
     }
-    viteProc.kill("SIGTERM");
+    if (browser) {
+      await browser.close().catch(() => {});
+    }
+    await stopChildProcess(viteProc);
     if (!keepFrames) {
       rmSync(frameDir, { recursive: true, force: true });
     } else {
