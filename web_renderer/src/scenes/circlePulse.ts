@@ -1,9 +1,13 @@
 import type { SceneDefinition } from "../core/scene-types";
 import { getRenderControls } from "../core/render-controls";
+import { getSubtitleFontFamily } from "../core/subtitle-overlay";
+import { getSubtitleFrameAt } from "../core/subtitle-track";
+import { getTrackFontFamily, getTrackOverlayInfo } from "../core/track-overlay";
 import type { AnalysisData } from "../types/analysis";
 
 let barCount = 0;
 let lastEmitT = -1;
+let trackDurationSec = 0;
 
 interface PulseParticle {
   x: number;
@@ -19,6 +23,127 @@ interface PulseParticle {
 }
 
 const pulseParticles: PulseParticle[] = [];
+const SUBTITLE_FADE_DURATION_MS = 250;
+
+function formatClock(seconds: number): string {
+  if (!Number.isFinite(seconds) || seconds < 0) {
+    return "0:00";
+  }
+  const rounded = Math.floor(seconds + 1e-6);
+  const mm = Math.floor(rounded / 60);
+  const ss = rounded % 60;
+  return `${mm}:${String(ss).padStart(2, "0")}`;
+}
+
+function drawPlaybackHud(
+  ctx: CanvasRenderingContext2D,
+  width: number,
+  height: number,
+  centerY: number,
+  baseRadius: number,
+  hudGap: number,
+  progress: number,
+  currentTimeSec: number,
+  glowStrength: number
+): void {
+  const trackInfo = getTrackOverlayInfo();
+  const titleText = trackInfo.title || "Untitled Track";
+  const artistText = trackInfo.artist || "";
+  const fontFamily = getTrackFontFamily();
+
+  const hudWidth = Math.min(width * 0.86, 980);
+  const hudX = (width - hudWidth) * 0.5;
+  const stableY = centerY + baseRadius + hudGap;
+  const hudY = Math.max(height * 0.58, Math.min(stableY, height - 90));
+  const barHeight = Math.max(7, Math.round(height * 0.011));
+  const titleFontSize = Math.max(22, Math.round(width * 0.028));
+  const artistFontSize = Math.max(20, Math.round(width * 0.024));
+  const timeFontSize = Math.max(16, Math.round(width * 0.018));
+  const subtitleFontSize = Math.min(44, Math.max(22, Math.round(width * 0.026)));
+  const clampedProgress = Math.max(0, Math.min(1, progress));
+  const cursorX = hudX + hudWidth * clampedProgress;
+
+  ctx.save();
+  ctx.lineCap = "round";
+
+  const titleBaseY = hudY - 15;
+
+  ctx.font = `${titleFontSize}px ${fontFamily}`;
+  ctx.textBaseline = "bottom";
+  ctx.fillStyle = "rgba(255, 255, 255, 0.95)";
+  ctx.shadowColor = `rgba(132, 228, 255, ${0.25 + glowStrength * 0.14})`;
+  ctx.shadowBlur = 6 + glowStrength * 5;
+  ctx.fillText(titleText, hudX, titleBaseY);
+
+  if (artistText) {
+    ctx.font = `${artistFontSize}px ${fontFamily}`;
+    ctx.textAlign = "right";
+    ctx.fillText(artistText, hudX + hudWidth, titleBaseY);
+    ctx.textAlign = "left";
+  }
+
+  ctx.shadowBlur = 0;
+  ctx.shadowColor = "transparent";
+
+  ctx.fillStyle = "rgba(255, 255, 255, 0.05)";
+  ctx.fillRect(hudX, hudY, hudWidth, barHeight);
+  ctx.strokeStyle = "rgba(255, 255, 255, 0.76)";
+  ctx.lineWidth = 1.4;
+  ctx.strokeRect(hudX, hudY, hudWidth, barHeight);
+
+  const progressGradient = ctx.createLinearGradient(hudX, 0, hudX + hudWidth, 0);
+  progressGradient.addColorStop(0, "rgba(83, 235, 255, 0.96)");
+  progressGradient.addColorStop(0.58, "rgba(120, 207, 255, 0.9)");
+  progressGradient.addColorStop(1, "rgba(178, 151, 255, 0.88)");
+  ctx.fillStyle = progressGradient;
+  ctx.fillRect(hudX, hudY, hudWidth * clampedProgress, barHeight);
+
+  ctx.strokeStyle = "rgba(171, 255, 255, 0.95)";
+  ctx.lineWidth = 1.1;
+  ctx.beginPath();
+  ctx.moveTo(cursorX, hudY - 3);
+  ctx.lineTo(cursorX, hudY + barHeight + 6);
+  ctx.stroke();
+
+  ctx.fillStyle = "rgba(255, 255, 255, 0.95)";
+  ctx.beginPath();
+  ctx.moveTo(cursorX, hudY + barHeight + 3);
+  ctx.lineTo(cursorX - 5, hudY + barHeight + 12);
+  ctx.lineTo(cursorX + 5, hudY + barHeight + 12);
+  ctx.closePath();
+  ctx.fill();
+
+  ctx.font = `${timeFontSize}px ${fontFamily}`;
+  ctx.textBaseline = "top";
+  ctx.fillStyle = "rgba(248, 248, 255, 0.9)";
+  const currentTimeText = formatClock(currentTimeSec);
+  const totalTimeText = formatClock(trackDurationSec);
+  const timeY = hudY + barHeight + 12;
+  ctx.textAlign = "left";
+  ctx.fillText(currentTimeText, hudX, timeY);
+  ctx.textAlign = "right";
+  ctx.fillText(totalTimeText, hudX + hudWidth, timeY);
+  ctx.textAlign = "left";
+
+  const subtitleFrame = getSubtitleFrameAt(currentTimeSec, trackDurationSec, SUBTITLE_FADE_DURATION_MS);
+  if (subtitleFrame) {
+    const subtitleY = Math.min(timeY + timeFontSize + 10, height - subtitleFontSize - 14);
+    const subtitleAlpha = Math.max(0, Math.min(1, subtitleFrame.alpha));
+    const subtitleFontFamily = getSubtitleFontFamily();
+    ctx.font = `${subtitleFontSize}px ${subtitleFontFamily}`;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "top";
+    ctx.fillStyle = `rgba(248, 249, 255, ${0.94 * subtitleAlpha})`;
+    ctx.shadowColor = `rgba(58, 125, 255, ${0.48 * subtitleAlpha})`;
+    ctx.shadowBlur = 12 * subtitleAlpha + glowStrength * 4;
+    ctx.fillText(subtitleFrame.text, width * 0.5, subtitleY);
+    ctx.textAlign = "left";
+    ctx.shadowBlur = 0;
+    ctx.shadowColor = "transparent";
+  }
+
+  ctx.restore();
+}
 
 function emitPulseParticles(
   cx: number,
@@ -54,6 +179,7 @@ export const circlePulseScene: SceneDefinition = {
   label: "Circle Pulse",
   initialize: (data: AnalysisData) => {
     barCount = data.meta.bands;
+    trackDurationSec = data.meta.duration;
     lastEmitT = -1;
     pulseParticles.length = 0;
   },
@@ -247,9 +373,22 @@ export const circlePulseScene: SceneDefinition = {
       ctx.arc(p.x, p.y, p.size * (0.55 + alpha), 0, Math.PI * 2);
       ctx.fill();
     }
+
+    drawPlaybackHud(
+      ctx,
+      width,
+      height,
+      cy,
+      baseRadius,
+      controls.circleHudGap,
+      rc.progress,
+      frame.t,
+      glowStrength
+    );
   },
   cleanup: () => {
     pulseParticles.length = 0;
+    trackDurationSec = 0;
     lastEmitT = -1;
   },
 };
