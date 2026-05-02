@@ -1,5 +1,11 @@
+// Render tuning controls
 export type RenderControlKey =
   | "particleSpeed"
+  | "particleStyleMode"
+  | "particleSeed"
+  | "particleShardDensity"
+  | "particle3DRotation"
+  | "circleHudGap"
   | "circleVibration"
   | "circleSpectrumGain"
   | "circleLineWidth"
@@ -9,6 +15,11 @@ export type RenderControlKey =
 
 export const renderControlKeys: RenderControlKey[] = [
   "particleSpeed",
+  "particleStyleMode",
+  "particleSeed",
+  "particleShardDensity",
+  "particle3DRotation",
+  "circleHudGap",
   "circleVibration",
   "circleSpectrumGain",
   "circleLineWidth",
@@ -19,6 +30,11 @@ export const renderControlKeys: RenderControlKey[] = [
 
 export interface RenderControls {
   particleSpeed: number;
+  particleStyleMode: number;
+  particleSeed: number;
+  particleShardDensity: number;
+  particle3DRotation: number;
+  circleHudGap: number;
   circleVibration: number;
   circleSpectrumGain: number;
   circleLineWidth: number;
@@ -29,6 +45,11 @@ export interface RenderControls {
 
 const controls: RenderControls = {
   particleSpeed: 0.85,
+  particleStyleMode: 2,
+  particleSeed: 20260502,
+  particleShardDensity: 1.2,
+  particle3DRotation: 1.15,
+  circleHudGap: 82,
   circleVibration: 0.7,
   circleSpectrumGain: 0.7,
   circleLineWidth: 1.6,
@@ -53,6 +74,21 @@ export function setRenderControl(key: RenderControlKey, value: number): void {
   switch (key) {
     case "particleSpeed":
       controls.particleSpeed = clamp(value, 0.3, 2);
+      break;
+    case "particleStyleMode":
+      controls.particleStyleMode = clamp(Math.round(value), 0, 2);
+      break;
+    case "particleSeed":
+      controls.particleSeed = clamp(Math.round(value), 1, 9_999_999);
+      break;
+    case "particleShardDensity":
+      controls.particleShardDensity = clamp(value, 0.4, 2.4);
+      break;
+    case "particle3DRotation":
+      controls.particle3DRotation = clamp(value, 0.2, 3);
+      break;
+    case "circleHudGap":
+      controls.circleHudGap = clamp(value, 28, 260);
       break;
     case "circleVibration":
       controls.circleVibration = clamp(value, 0.2, 1.8);

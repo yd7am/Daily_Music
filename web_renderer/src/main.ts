@@ -9,6 +9,8 @@ import {
   type RenderControlKey,
   type RenderControls,
 } from "./core/render-controls";
+import { getSubtitleStyle, setSubtitleStyle, SUBTITLE_FONT_OPTIONS } from "./core/subtitle-overlay";
+import { getTrackOverlayInfo, setTrackOverlayInfo, TRACK_FONT_OPTIONS } from "./core/track-overlay";
 import { RendererEngine } from "./core/renderer-engine";
 import { getPresetById, visualPresets } from "./presets/music-presets";
 import { getSceneById, scenes } from "./scenes";
@@ -22,6 +24,10 @@ const RENDER_CONFIG_FILE_NAME = "render-controls.json";
 interface RendererConfigPayload {
   presetId?: string;
   sceneId?: string;
+  trackTitle?: string;
+  trackArtist?: string;
+  trackFont?: string;
+  subtitleFont?: string;
   controls: Partial<Record<RenderControlKey, number>>;
 }
 
@@ -91,13 +97,51 @@ function parseRendererConfigPayload(raw: unknown): RendererConfigPayload | null 
       : typeof raw.scene === "string"
         ? raw.scene
         : undefined;
-  if (!presetId && !sceneId && Object.keys(controls).length === 0) {
+  const trackTitle =
+    typeof raw.trackTitle === "string"
+      ? raw.trackTitle
+      : typeof raw.title === "string"
+        ? raw.title
+        : undefined;
+  const trackArtist =
+    typeof raw.trackArtist === "string"
+      ? raw.trackArtist
+      : typeof raw.artist === "string"
+        ? raw.artist
+        : undefined;
+  const trackFont =
+    typeof raw.trackFont === "string"
+      ? raw.trackFont
+      : typeof raw.fontKey === "string"
+        ? raw.fontKey
+        : typeof raw.font === "string"
+          ? raw.font
+          : undefined;
+  const subtitleFont =
+    typeof raw.subtitleFont === "string"
+      ? raw.subtitleFont
+      : typeof raw.subtitleFontKey === "string"
+        ? raw.subtitleFontKey
+        : undefined;
+  if (
+    !presetId &&
+    !sceneId &&
+    trackTitle === undefined &&
+    trackArtist === undefined &&
+    trackFont === undefined &&
+    subtitleFont === undefined &&
+    Object.keys(controls).length === 0
+  ) {
     return null;
   }
 
   return {
     presetId,
     sceneId,
+    trackTitle,
+    trackArtist,
+    trackFont,
+    subtitleFont,
     controls,
   };
 }
@@ -142,12 +186,52 @@ app.innerHTML = `
         <select id="presetSelect"></select>
       </div>
       <div class="row">
+        <label>曲名</label>
+        <input id="trackTitleInput" type="text" placeholder="Cry For Me (feat. Ami)" />
+      </div>
+      <div class="row">
+        <label>作者</label>
+        <input id="trackArtistInput" type="text" placeholder="Michita" />
+      </div>
+      <div class="row">
+        <label>标题字体</label>
+        <select id="trackFontSelect"></select>
+      </div>
+      <div class="row">
+        <label>字幕字体</label>
+        <select id="subtitleFontSelect"></select>
+      </div>
+      <div class="row">
+        <label>粒子风格</label>
+        <select id="particleStyleModeSelect">
+          <option value="0">圆形光点</option>
+          <option value="1">立体多面体</option>
+          <option value="2">混合（推荐）</option>
+        </select>
+      </div>
+      <div class="row">
+        <label>随机种子</label>
+        <input id="particleSeedInput" type="number" min="1" max="9999999" step="1" />
+      </div>
+      <div class="row">
         <label>粒子速度 <span id="particleSpeedValue" class="inline-value"></span></label>
         <input id="particleSpeedRange" type="range" min="0.3" max="2" step="0.05" />
       </div>
       <div class="row">
+        <label>多面体密度 <span id="particleShardDensityValue" class="inline-value"></span></label>
+        <input id="particleShardDensityRange" type="range" min="0.4" max="2.4" step="0.05" />
+      </div>
+      <div class="row">
+        <label>3D旋转强度 <span id="particle3DRotationValue" class="inline-value"></span></label>
+        <input id="particle3DRotationRange" type="range" min="0.2" max="3" step="0.05" />
+      </div>
+      <div class="row">
         <label>圆形震动强度 <span id="circleVibrationValue" class="inline-value"></span></label>
         <input id="circleVibrationRange" type="range" min="0.2" max="1.8" step="0.05" />
+      </div>
+      <div class="row">
+        <label>进度条距离圆环 <span id="circleHudGapValue" class="inline-value"></span></label>
+        <input id="circleHudGapRange" type="range" min="28" max="260" step="2" />
       </div>
       <div class="row">
         <label>频谱高度增益 <span id="circleSpectrumGainValue" class="inline-value"></span></label>
@@ -195,10 +279,22 @@ const analysisInput = document.querySelector<HTMLInputElement>("#analysisInput")
 const audioInput = document.querySelector<HTMLInputElement>("#audioInput")!;
 const sceneSelect = document.querySelector<HTMLSelectElement>("#sceneSelect")!;
 const presetSelect = document.querySelector<HTMLSelectElement>("#presetSelect")!;
+const trackTitleInput = document.querySelector<HTMLInputElement>("#trackTitleInput")!;
+const trackArtistInput = document.querySelector<HTMLInputElement>("#trackArtistInput")!;
+const trackFontSelect = document.querySelector<HTMLSelectElement>("#trackFontSelect")!;
+const subtitleFontSelect = document.querySelector<HTMLSelectElement>("#subtitleFontSelect")!;
+const particleStyleModeSelect = document.querySelector<HTMLSelectElement>("#particleStyleModeSelect")!;
+const particleSeedInput = document.querySelector<HTMLInputElement>("#particleSeedInput")!;
 const particleSpeedRange = document.querySelector<HTMLInputElement>("#particleSpeedRange")!;
 const particleSpeedValue = document.querySelector<HTMLSpanElement>("#particleSpeedValue")!;
+const particleShardDensityRange = document.querySelector<HTMLInputElement>("#particleShardDensityRange")!;
+const particleShardDensityValue = document.querySelector<HTMLSpanElement>("#particleShardDensityValue")!;
+const particle3DRotationRange = document.querySelector<HTMLInputElement>("#particle3DRotationRange")!;
+const particle3DRotationValue = document.querySelector<HTMLSpanElement>("#particle3DRotationValue")!;
 const circleVibrationRange = document.querySelector<HTMLInputElement>("#circleVibrationRange")!;
 const circleVibrationValue = document.querySelector<HTMLSpanElement>("#circleVibrationValue")!;
+const circleHudGapRange = document.querySelector<HTMLInputElement>("#circleHudGapRange")!;
+const circleHudGapValue = document.querySelector<HTMLSpanElement>("#circleHudGapValue")!;
 const circleSpectrumGainRange = document.querySelector<HTMLInputElement>("#circleSpectrumGainRange")!;
 const circleSpectrumGainValue = document.querySelector<HTMLSpanElement>("#circleSpectrumGainValue")!;
 const circleLineWidthRange = document.querySelector<HTMLInputElement>("#circleLineWidthRange")!;
@@ -234,6 +330,18 @@ for (const preset of visualPresets) {
   option.textContent = preset.label;
   presetSelect.appendChild(option);
 }
+for (const fontOption of TRACK_FONT_OPTIONS) {
+  const option = document.createElement("option");
+  option.value = fontOption.key;
+  option.textContent = fontOption.label;
+  trackFontSelect.appendChild(option);
+}
+for (const fontOption of SUBTITLE_FONT_OPTIONS) {
+  const option = document.createElement("option");
+  option.value = fontOption.key;
+  option.textContent = fontOption.label;
+  subtitleFontSelect.appendChild(option);
+}
 const storedRendererConfig = readRendererConfigFromStorage();
 const initialPresetId = storedRendererConfig?.presetId && hasPreset(storedRendererConfig.presetId)
   ? storedRendererConfig.presetId
@@ -245,6 +353,26 @@ const initialSceneId = storedRendererConfig?.sceneId && hasScene(storedRendererC
 sceneSelect.value = initialSceneId;
 if (storedRendererConfig?.controls) {
   applyRenderControls(storedRendererConfig.controls);
+}
+if (
+  storedRendererConfig?.trackTitle !== undefined ||
+  storedRendererConfig?.trackArtist !== undefined ||
+  storedRendererConfig?.trackFont !== undefined
+) {
+  const initialTrackPayload: { title?: string; artist?: string; fontKey?: string } = {};
+  if (typeof storedRendererConfig.trackTitle === "string") {
+    initialTrackPayload.title = storedRendererConfig.trackTitle;
+  }
+  if (typeof storedRendererConfig.trackArtist === "string") {
+    initialTrackPayload.artist = storedRendererConfig.trackArtist;
+  }
+  if (typeof storedRendererConfig.trackFont === "string") {
+    initialTrackPayload.fontKey = storedRendererConfig.trackFont;
+  }
+  setTrackOverlayInfo(initialTrackPayload);
+}
+if (storedRendererConfig?.subtitleFont !== undefined) {
+  setSubtitleStyle({ fontKey: storedRendererConfig.subtitleFont });
 }
 
 const renderer = new RendererEngine(canvas);
@@ -289,10 +417,16 @@ function collectControlValues(): Partial<Record<RenderControlKey, number>> {
 }
 
 function buildPersistedRendererConfig(): PersistedRendererConfig {
+  const trackInfo = getTrackOverlayInfo();
+  const subtitleStyle = getSubtitleStyle();
   return {
     version: RENDER_CONFIG_VERSION,
     presetId: presetSelect.value,
     sceneId: sceneSelect.value,
+    trackTitle: trackInfo.title,
+    trackArtist: trackInfo.artist,
+    trackFont: trackInfo.fontKey,
+    subtitleFont: subtitleStyle.fontKey,
     controls: collectControlValues(),
     updatedAt: new Date().toISOString(),
   };
@@ -319,6 +453,27 @@ function syncAllSliderBindings(): void {
   }
 }
 
+function syncDiscreteControlBindings(): void {
+  const controls = getRenderControls();
+  particleStyleModeSelect.value = String(Math.round(controls.particleStyleMode));
+  particleSeedInput.value = String(Math.round(controls.particleSeed));
+}
+
+function syncTrackInfoInputs(): void {
+  const trackInfo = getTrackOverlayInfo();
+  const subtitleStyle = getSubtitleStyle();
+  trackTitleInput.value = trackInfo.title;
+  trackArtistInput.value = trackInfo.artist;
+  trackFontSelect.value = trackInfo.fontKey;
+  subtitleFontSelect.value = subtitleStyle.fontKey;
+}
+
+function syncAllControlBindings(): void {
+  syncAllSliderBindings();
+  syncDiscreteControlBindings();
+  syncTrackInfoInputs();
+}
+
 function applyRendererConfigPayload(payload: RendererConfigPayload, persist = true): void {
   const nextPresetId =
     payload.presetId && hasPreset(payload.presetId) ? payload.presetId : presetSelect.value;
@@ -331,9 +486,38 @@ function applyRendererConfigPayload(payload: RendererConfigPayload, persist = tr
     }
   }
 
+  const hasTrackTitle = typeof payload.trackTitle === "string";
+  const hasTrackArtist = typeof payload.trackArtist === "string";
+  const hasTrackFont = typeof payload.trackFont === "string";
+  const hasSubtitleFont = typeof payload.subtitleFont === "string";
+  if (hasTrackTitle || hasTrackArtist || hasTrackFont) {
+    const currentTrack = getTrackOverlayInfo();
+    const nextTrack = {
+      title: currentTrack.title,
+      artist: currentTrack.artist,
+      fontKey: currentTrack.fontKey,
+    };
+    if (typeof payload.trackTitle === "string") {
+      nextTrack.title = payload.trackTitle;
+    }
+    if (typeof payload.trackArtist === "string") {
+      nextTrack.artist = payload.trackArtist;
+    }
+    setTrackOverlayInfo({
+      title: nextTrack.title,
+      artist: nextTrack.artist,
+      fontKey: typeof payload.trackFont === "string" ? payload.trackFont : nextTrack.fontKey,
+    });
+    syncTrackInfoInputs();
+  }
+  if (hasSubtitleFont) {
+    setSubtitleStyle({ fontKey: payload.subtitleFont });
+    syncTrackInfoInputs();
+  }
+
   if (Object.keys(payload.controls).length > 0) {
     applyRenderControls(payload.controls);
-    syncAllSliderBindings();
+    syncAllControlBindings();
   }
 
   let nextSceneId = sceneSelect.value;
@@ -425,6 +609,13 @@ audioInput.addEventListener("change", (event) => {
     return;
   }
   audio.src = URL.createObjectURL(file);
+  const currentTrack = getTrackOverlayInfo();
+  if (!currentTrack.title) {
+    const inferredTitle = file.name.replace(/\.[^/.]+$/, "");
+    setTrackOverlayInfo({ title: inferredTitle });
+    syncTrackInfoInputs();
+    saveRendererConfigToStorage();
+  }
   setStatus(`音频已加载: ${file.name}`);
 });
 
@@ -443,6 +634,42 @@ presetSelect.addEventListener("change", () => {
     conductor.build(analysisData);
     renderer.setScene(getSceneById(preset.defaultSceneId));
   }
+  saveRendererConfigToStorage();
+});
+
+trackTitleInput.addEventListener("input", () => {
+  setTrackOverlayInfo({ title: trackTitleInput.value });
+  saveRendererConfigToStorage();
+});
+
+trackArtistInput.addEventListener("input", () => {
+  setTrackOverlayInfo({ artist: trackArtistInput.value });
+  saveRendererConfigToStorage();
+});
+
+trackFontSelect.addEventListener("change", () => {
+  setTrackOverlayInfo({ fontKey: trackFontSelect.value });
+  syncTrackInfoInputs();
+  saveRendererConfigToStorage();
+});
+
+subtitleFontSelect.addEventListener("change", () => {
+  setSubtitleStyle({ fontKey: subtitleFontSelect.value });
+  syncTrackInfoInputs();
+  saveRendererConfigToStorage();
+});
+
+particleStyleModeSelect.addEventListener("change", () => {
+  const styleMode = Number.parseInt(particleStyleModeSelect.value, 10);
+  setRenderControl("particleStyleMode", Number.isFinite(styleMode) ? styleMode : 2);
+  syncDiscreteControlBindings();
+  saveRendererConfigToStorage();
+});
+
+particleSeedInput.addEventListener("change", () => {
+  const seedValue = Number.parseInt(particleSeedInput.value, 10);
+  setRenderControl("particleSeed", Number.isFinite(seedValue) ? seedValue : getRenderControls().particleSeed);
+  syncDiscreteControlBindings();
   saveRendererConfigToStorage();
 });
 
@@ -563,7 +790,20 @@ window.dailyMusicOffline = {
 };
 
 bindControlSlider(particleSpeedRange, particleSpeedValue, "particleSpeed", (value) => `${value.toFixed(2)}x`);
+bindControlSlider(
+  particleShardDensityRange,
+  particleShardDensityValue,
+  "particleShardDensity",
+  (value) => `${value.toFixed(2)}x`
+);
+bindControlSlider(
+  particle3DRotationRange,
+  particle3DRotationValue,
+  "particle3DRotation",
+  (value) => `${value.toFixed(2)}x`
+);
 bindControlSlider(circleVibrationRange, circleVibrationValue, "circleVibration", (value) => `${value.toFixed(2)}x`);
+bindControlSlider(circleHudGapRange, circleHudGapValue, "circleHudGap", (value) => `${Math.round(value)}px`);
 bindControlSlider(circleSpectrumGainRange, circleSpectrumGainValue, "circleSpectrumGain", (value) => `${value.toFixed(2)}x`);
 bindControlSlider(circleLineWidthRange, circleLineWidthValue, "circleLineWidth", (value) => `${value.toFixed(2)}x`);
 bindControlSlider(circleGlowStrengthRange, circleGlowStrengthValue, "circleGlowStrength", (value) => `${value.toFixed(2)}x`);
@@ -573,6 +813,6 @@ bindControlSlider(circleLineCountRange, circleLineCountValue, "circleLineCount",
 if (!storedRendererConfig) {
   applyRenderControls(defaultRenderControls);
 }
-syncAllSliderBindings();
+syncAllControlBindings();
 saveRendererConfigToStorage();
 void hydrateRendererConfigFromFileIfNeeded();

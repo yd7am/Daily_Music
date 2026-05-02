@@ -9,6 +9,11 @@ import { chromium } from "playwright";
 
 const RENDER_CONTROL_KEYS = [
   "particleSpeed",
+  "particleStyleMode",
+  "particleSeed",
+  "particleShardDensity",
+  "particle3DRotation",
+  "circleHudGap",
   "circleVibration",
   "circleSpectrumGain",
   "circleLineWidth",
@@ -64,12 +69,50 @@ function parseRendererConfig(rawConfig) {
 
   const presetId = typeof rawConfig.presetId === "string" ? rawConfig.presetId : undefined;
   const sceneId = typeof rawConfig.sceneId === "string" ? rawConfig.sceneId : undefined;
-  if (!presetId && !sceneId && Object.keys(controls).length === 0) {
+  const trackTitle =
+    typeof rawConfig.trackTitle === "string"
+      ? rawConfig.trackTitle
+      : typeof rawConfig.title === "string"
+        ? rawConfig.title
+        : undefined;
+  const trackArtist =
+    typeof rawConfig.trackArtist === "string"
+      ? rawConfig.trackArtist
+      : typeof rawConfig.artist === "string"
+        ? rawConfig.artist
+        : undefined;
+  const trackFont =
+    typeof rawConfig.trackFont === "string"
+      ? rawConfig.trackFont
+      : typeof rawConfig.fontKey === "string"
+        ? rawConfig.fontKey
+        : typeof rawConfig.font === "string"
+          ? rawConfig.font
+          : undefined;
+  const subtitleFont =
+    typeof rawConfig.subtitleFont === "string"
+      ? rawConfig.subtitleFont
+      : typeof rawConfig.subtitleFontKey === "string"
+        ? rawConfig.subtitleFontKey
+        : undefined;
+  if (
+    !presetId &&
+    !sceneId &&
+    !trackTitle &&
+    !trackArtist &&
+    !trackFont &&
+    !subtitleFont &&
+    Object.keys(controls).length === 0
+  ) {
     return null;
   }
   return {
     presetId,
     sceneId,
+    trackTitle,
+    trackArtist,
+    trackFont,
+    subtitleFont,
     controls,
   };
 }
