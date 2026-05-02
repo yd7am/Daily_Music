@@ -174,6 +174,20 @@ function spawnCommand(command, args, options = {}) {
   });
 }
 
+function formatDuration(totalSeconds) {
+  if (!Number.isFinite(totalSeconds) || totalSeconds < 0) {
+    return "--:--";
+  }
+  const rounded = Math.max(0, Math.floor(totalSeconds + 0.5));
+  const hours = Math.floor(rounded / 3600);
+  const minutes = Math.floor((rounded % 3600) / 60);
+  const seconds = rounded % 60;
+  if (hours > 0) {
+    return `${hours}:${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
+  }
+  return `${minutes}:${String(seconds).padStart(2, "0")}`;
+}
+
 async function main() {
   const args = parseArgs(process.argv.slice(2));
   const currentFile = fileURLToPath(import.meta.url);
@@ -236,6 +250,13 @@ async function main() {
     const duration = await page.evaluate(() => window.dailyMusicOffline?.getDuration() ?? 0);
     const totalFrames = Math.max(1, Math.ceil(duration * fps));
     const canvas = page.locator("#renderCanvas");
+    const renderStartTimeMs = Date.now();
+    let lastProgressLogTimeMs = 0;
+    let lastProgressPercentBucket = -1;
+
+    process.stdout.write(
+      `开始逐帧渲染: duration=${duration.toFixed(3)}s, totalFrames=${totalFrames}, output=${width}x${height}@${fps}fps\n`
+    );
 
     for (let i = 0; i < totalFrames; i += 1) {
       const t = i / fps;
@@ -245,12 +266,34 @@ async function main() {
       await page.waitForTimeout(18);
       const framePath = path.join(frameDir, `frame_${String(i).padStart(6, "0")}.png`);
       await canvas.screenshot({ path: framePath });
-      if (i % Math.max(1, Math.floor(totalFrames / 10)) === 0) {
-        const pct = ((i / totalFrames) * 100).toFixed(0);
-        process.stdout.write(`渲染进度 ${pct}%\n`);
+
+      const completedFrames = i + 1;
+      const progressRatio = completedFrames / totalFrames;
+      const progressPercent = progressRatio * 100;
+      const progressPercentBucket = Math.floor(progressPercent);
+      const nowMs = Date.now();
+      const elapsedSec = Math.max(0.001, (nowMs - renderStartTimeMs) / 1000);
+      const renderFps = completedFrames / elapsedSec;
+      const remainingFrames = Math.max(0, totalFrames - completedFrames);
+      const etaSec = renderFps > 0 ? remainingFrames / renderFps : Infinity;
+      const shouldLog =
+        completedFrames === 1 ||
+        completedFrames === totalFrames ||
+        progressPercentBucket > lastProgressPercentBucket ||
+        nowMs - lastProgressLogTimeMs >= 2000;
+
+      if (shouldLog) {
+        process.stdout.write(
+          `渲染进度 ${progressPercent.toFixed(1)}% (${completedFrames}/${totalFrames}) | 速度 ${renderFps.toFixed(
+            2
+          )} 帧/s | 已耗时 ${formatDuration(elapsedSec)} | 预计剩余 ${formatDuration(etaSec)}\n`
+        );
+        lastProgressLogTimeMs = nowMs;
+        lastProgressPercentBucket = progressPercentBucket;
       }
     }
 
+    process.stdout.write("逐帧渲染完成，开始调用 ffmpeg 合成 MP4...\n");
     await spawnCommand(
       "ffmpeg",
       [
