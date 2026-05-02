@@ -5,6 +5,8 @@ export type RenderControlKey =
   | "particleSeed"
   | "particleShardDensity"
   | "particle3DRotation"
+  | "subtitleSize"
+  | "circleCoverScale"
   | "circleHudGap"
   | "circleVibration"
   | "circleSpectrumGain"
@@ -19,6 +21,8 @@ export const renderControlKeys: RenderControlKey[] = [
   "particleSeed",
   "particleShardDensity",
   "particle3DRotation",
+  "subtitleSize",
+  "circleCoverScale",
   "circleHudGap",
   "circleVibration",
   "circleSpectrumGain",
@@ -34,6 +38,8 @@ export interface RenderControls {
   particleSeed: number;
   particleShardDensity: number;
   particle3DRotation: number;
+  subtitleSize: number;
+  circleCoverScale: number;
   circleHudGap: number;
   circleVibration: number;
   circleSpectrumGain: number;
@@ -49,6 +55,8 @@ const controls: RenderControls = {
   particleSeed: 20260502,
   particleShardDensity: 1.2,
   particle3DRotation: 1.15,
+  subtitleSize: 1,
+  circleCoverScale: 0.78,
   circleHudGap: 82,
   circleVibration: 0.7,
   circleSpectrumGain: 0.7,
@@ -86,6 +94,12 @@ export function setRenderControl(key: RenderControlKey, value: number): void {
       break;
     case "particle3DRotation":
       controls.particle3DRotation = clamp(value, 0.2, 3);
+      break;
+    case "subtitleSize":
+      controls.subtitleSize = clamp(value, 0.55, 2.4);
+      break;
+    case "circleCoverScale":
+      controls.circleCoverScale = clamp(value, 0.35, 1.15);
       break;
     case "circleHudGap":
       controls.circleHudGap = clamp(value, 28, 260);

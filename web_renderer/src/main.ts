@@ -202,6 +202,10 @@ app.innerHTML = `
         <select id="subtitleFontSelect"></select>
       </div>
       <div class="row">
+        <label>字幕字号 <span id="subtitleSizeValue" class="inline-value"></span></label>
+        <input id="subtitleSizeRange" type="range" min="0.55" max="2.4" step="0.05" />
+      </div>
+      <div class="row">
         <label>粒子风格</label>
         <select id="particleStyleModeSelect">
           <option value="0">圆形光点</option>
@@ -228,6 +232,10 @@ app.innerHTML = `
       <div class="row">
         <label>圆形震动强度 <span id="circleVibrationValue" class="inline-value"></span></label>
         <input id="circleVibrationRange" type="range" min="0.2" max="1.8" step="0.05" />
+      </div>
+      <div class="row">
+        <label>中心图片缩放 <span id="circleCoverScaleValue" class="inline-value"></span></label>
+        <input id="circleCoverScaleRange" type="range" min="0.35" max="1.15" step="0.01" />
       </div>
       <div class="row">
         <label>进度条距离圆环 <span id="circleHudGapValue" class="inline-value"></span></label>
@@ -283,6 +291,8 @@ const trackTitleInput = document.querySelector<HTMLInputElement>("#trackTitleInp
 const trackArtistInput = document.querySelector<HTMLInputElement>("#trackArtistInput")!;
 const trackFontSelect = document.querySelector<HTMLSelectElement>("#trackFontSelect")!;
 const subtitleFontSelect = document.querySelector<HTMLSelectElement>("#subtitleFontSelect")!;
+const subtitleSizeRange = document.querySelector<HTMLInputElement>("#subtitleSizeRange")!;
+const subtitleSizeValue = document.querySelector<HTMLSpanElement>("#subtitleSizeValue")!;
 const particleStyleModeSelect = document.querySelector<HTMLSelectElement>("#particleStyleModeSelect")!;
 const particleSeedInput = document.querySelector<HTMLInputElement>("#particleSeedInput")!;
 const particleSpeedRange = document.querySelector<HTMLInputElement>("#particleSpeedRange")!;
@@ -293,6 +303,8 @@ const particle3DRotationRange = document.querySelector<HTMLInputElement>("#parti
 const particle3DRotationValue = document.querySelector<HTMLSpanElement>("#particle3DRotationValue")!;
 const circleVibrationRange = document.querySelector<HTMLInputElement>("#circleVibrationRange")!;
 const circleVibrationValue = document.querySelector<HTMLSpanElement>("#circleVibrationValue")!;
+const circleCoverScaleRange = document.querySelector<HTMLInputElement>("#circleCoverScaleRange")!;
+const circleCoverScaleValue = document.querySelector<HTMLSpanElement>("#circleCoverScaleValue")!;
 const circleHudGapRange = document.querySelector<HTMLInputElement>("#circleHudGapRange")!;
 const circleHudGapValue = document.querySelector<HTMLSpanElement>("#circleHudGapValue")!;
 const circleSpectrumGainRange = document.querySelector<HTMLInputElement>("#circleSpectrumGainRange")!;
@@ -802,7 +814,9 @@ bindControlSlider(
   "particle3DRotation",
   (value) => `${value.toFixed(2)}x`
 );
+bindControlSlider(subtitleSizeRange, subtitleSizeValue, "subtitleSize", (value) => `${Math.round(value * 100)}%`);
 bindControlSlider(circleVibrationRange, circleVibrationValue, "circleVibration", (value) => `${value.toFixed(2)}x`);
+bindControlSlider(circleCoverScaleRange, circleCoverScaleValue, "circleCoverScale", (value) => `${Math.round(value * 100)}%`);
 bindControlSlider(circleHudGapRange, circleHudGapValue, "circleHudGap", (value) => `${Math.round(value)}px`);
 bindControlSlider(circleSpectrumGainRange, circleSpectrumGainValue, "circleSpectrumGain", (value) => `${value.toFixed(2)}x`);
 bindControlSlider(circleLineWidthRange, circleLineWidthValue, "circleLineWidth", (value) => `${value.toFixed(2)}x`);
