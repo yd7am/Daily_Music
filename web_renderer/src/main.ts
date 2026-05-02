@@ -46,6 +46,9 @@ interface SliderBinding {
 interface OfflineBridge {
   loadAnalysisObject: (data: AnalysisData, sceneId?: string) => void;
   seek: (timeSec: number) => void;
+  seekAndRender: (timeSec: number) => void;
+  startRealtimePlayback: (startTimeSec?: number) => void;
+  stopRealtimePlayback: () => void;
   setScene: (sceneId: string) => void;
   setRenderControls: (values: Partial<Record<RenderControlKey, number>>) => void;
   applyRendererConfig: (config: unknown) => void;
@@ -163,6 +166,8 @@ const app = document.querySelector<HTMLDivElement>("#app");
 if (!app) {
   throw new Error("找不到挂载节点 #app");
 }
+const query = new URLSearchParams(window.location.search);
+const isOfflineMode = query.get("offline") === "1";
 
 app.innerHTML = `
   <main class="layout">
@@ -391,7 +396,9 @@ const renderer = new RendererEngine(canvas);
 const conductor = new GsapConductor();
 conductor.setPreset(presetSelect.value);
 renderer.bindAudio(audio);
-renderer.start();
+if (!isOfflineMode) {
+  renderer.start();
+}
 
 let analysisData: AnalysisData | null = null;
 let isPlaying = false;
@@ -753,8 +760,6 @@ importConfigInput.addEventListener("change", async (event) => {
   }
 });
 
-const query = new URLSearchParams(window.location.search);
-const isOfflineMode = query.get("offline") === "1";
 if (isOfflineMode) {
   document.body.classList.add("offline-mode");
   const width = Number.parseInt(query.get("width") ?? "1280", 10);
@@ -777,6 +782,19 @@ window.dailyMusicOffline = {
   },
   seek: (timeSec: number) => {
     renderer.seek(timeSec);
+  },
+  seekAndRender: (timeSec: number) => {
+    renderer.seek(timeSec);
+    renderer.renderNow();
+  },
+  startRealtimePlayback: (startTimeSec = 0) => {
+    const nextTime = Number.isFinite(startTimeSec) ? Math.max(0, startTimeSec) : 0;
+    renderer.start();
+    renderer.seek(nextTime);
+    renderer.play();
+  },
+  stopRealtimePlayback: () => {
+    renderer.pause();
   },
   setScene: (sceneId: string) => {
     sceneSelect.value = sceneId;

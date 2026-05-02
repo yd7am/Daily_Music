@@ -132,7 +132,34 @@ python main.py render-web \
   --audio input/xxx.mp3 \
   -o output/xxx_web.mp4 \
   --controls web_renderer/render-controls.json \
-  --scene particleBurst
+  --scene particleBurst \
+  --export-mode frame
+```
+
+快速检查（仅导出前 20 秒）：
+
+```bash
+python main.py render-web \
+  --analysis output/analysis/xxx.analysis.json \
+  --audio input/xxx.mp3 \
+  -o output/xxx_web_quick.mp4 \
+  --controls web_renderer/render-controls.json \
+  --scene particleBurst \
+  --quick-check
+```
+
+如需自定义快速检查时长，可追加 `--quick-check-seconds 30`。
+
+如需导出效果尽量贴近页面实时预览，可改为：
+
+```bash
+python main.py render-web \
+  --analysis output/analysis/xxx.analysis.json \
+  --audio input/xxx.mp3 \
+  -o output/xxx_web_realtime.mp4 \
+  --controls web_renderer/render-controls.json \
+  --scene particleBurst \
+  --export-mode realtime
 ```
 
 ## Web 实时预览

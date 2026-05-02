@@ -13,7 +13,7 @@ export class RendererEngine {
   private frameListener: ((timeSec: number, frame: AnalysisFrame) => void) | null = null;
 
   private rafId: number | null = null;
-  private lastNow = 0;
+  private lastTimelineTimeSec: number | null = null;
   private fallbackTimeSec = 0;
   private fallbackAnchorNow = 0;
   private fallbackPlaying = false;
@@ -52,10 +52,19 @@ export class RendererEngine {
     this.scene?.cleanup?.();
     this.scene = scene;
     this.scene.initialize(this.analysis);
+    this.lastTimelineTimeSec = null;
+  }
+
+  private hasUsableAudioClock(): boolean {
+    if (!this.audio) {
+      return false;
+    }
+    const hasSource = Boolean(this.audio.currentSrc || this.audio.src);
+    return hasSource && this.audio.readyState >= HTMLMediaElement.HAVE_METADATA;
   }
 
   private getCurrentTime(): number {
-    if (this.audio && Number.isFinite(this.audio.currentTime)) {
+    if (this.hasUsableAudioClock() && this.audio && Number.isFinite(this.audio.currentTime)) {
       return this.audio.currentTime;
     }
 
@@ -68,7 +77,7 @@ export class RendererEngine {
   }
 
   play(): void {
-    if (this.audio && this.audio.src) {
+    if (this.audio && (this.audio.currentSrc || this.audio.src)) {
       void this.audio.play();
       return;
     }
@@ -79,7 +88,7 @@ export class RendererEngine {
   }
 
   pause(): void {
-    if (this.audio && this.audio.src) {
+    if (this.audio && (this.audio.currentSrc || this.audio.src)) {
       this.audio.pause();
       return;
     }
@@ -91,7 +100,7 @@ export class RendererEngine {
 
   seek(timeSec: number): void {
     const nextTime = Math.max(0, timeSec);
-    if (this.audio && this.audio.src) {
+    if (this.audio && (this.audio.currentSrc || this.audio.src)) {
       try {
         this.audio.currentTime = nextTime;
       } catch (_error) {
@@ -102,6 +111,10 @@ export class RendererEngine {
     }
     this.fallbackTimeSec = nextTime;
     this.fallbackAnchorNow = performance.now() / 1000;
+  }
+
+  renderNow(): void {
+    this.drawFrame(performance.now());
   }
 
   private drawFrame(now: number): void {
@@ -117,8 +130,10 @@ export class RendererEngine {
     const frame = this.timeSync.getFrameByTime(currentTime);
     this.frameListener?.(currentTime, frame);
     const progress = this.timeSync.getProgress(currentTime);
-    const deltaTime = this.lastNow === 0 ? 0 : (now - this.lastNow) / 1000;
-    this.lastNow = now;
+    const rawDeltaTime =
+      this.lastTimelineTimeSec === null ? 0 : Math.max(0, currentTime - this.lastTimelineTimeSec);
+    const deltaTime = rawDeltaTime > 0.5 ? 0 : rawDeltaTime;
+    this.lastTimelineTimeSec = currentTime;
 
     const state = this.animationStateProvider();
     this.scene.render(
@@ -129,7 +144,7 @@ export class RendererEngine {
         height: this.canvas.height,
         progress,
         deltaTime,
-        now: now / 1000,
+        now: currentTime,
       },
       state
     );
@@ -152,6 +167,7 @@ export class RendererEngine {
       cancelAnimationFrame(this.rafId);
       this.rafId = null;
     }
+    this.lastTimelineTimeSec = null;
     this.scene?.cleanup?.();
   }
 }

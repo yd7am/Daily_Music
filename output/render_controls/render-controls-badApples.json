@@ -12,7 +12,7 @@
     "particleSeed": 14234,
     "particleShardDensity": 2.4,
     "particle3DRotation": 1.05,
-    "subtitleSize": 0.7,
+    "subtitleSize": 0.8,
     "circleCoverScale": 0.97,
     "circleHudGap": 260,
     "circleVibration": 0.2,
@@ -22,5 +22,5 @@
     "circleSpacing": 1.2,
     "circleLineCount": 84
   },
-  "updatedAt": "2026-05-02T04:25:58.807Z"
+  "updatedAt": "2026-05-02T07:54:22.513Z"
 }

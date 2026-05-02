@@ -185,14 +185,19 @@ def run_web_renderer(
     output_path: str,
     scene: str | None,
     controls_path: str | None,
+    export_mode: str,
     fps: int,
     width: int,
     height: int,
     port: int,
     keep_frames: bool,
+    quick_check: bool,
+    quick_check_seconds: float,
 ) -> None:
     if not WEB_RENDERER_DIR.exists():
         raise RuntimeError("未找到 web_renderer 目录，请先初始化前端渲染模块。")
+    if quick_check and quick_check_seconds <= 0:
+        raise RuntimeError("--quick-check-seconds 必须大于 0")
 
     cmd = [
         "npm",
@@ -213,6 +218,8 @@ def run_web_renderer(
         str(height),
         "--port",
         str(port),
+        "--export-mode",
+        export_mode,
     ]
     if scene:
         cmd.extend(["--scene", scene])
@@ -220,6 +227,11 @@ def run_web_renderer(
         cmd.extend(["--controls", str(Path(controls_path).resolve())])
     if keep_frames:
         cmd.append("--keepFrames")
+    if quick_check:
+        cmd.extend(["--max-seconds", str(quick_check_seconds)])
+        print(
+            f"{Fore.YELLOW}⚡ Quick Check 模式：仅导出前 {quick_check_seconds:.1f} 秒，用于快速预览。{Style.RESET_ALL}"
+        )
 
     print(f"{Fore.CYAN}🎬 正在调用 Web 渲染离线导出...{Style.RESET_ALL}")
     try:
@@ -243,11 +255,14 @@ def run_render_web(args: argparse.Namespace) -> None:
         output_path=args.output,
         scene=args.scene,
         controls_path=args.controls,
+        export_mode=args.export_mode,
         fps=args.fps,
         width=args.width,
         height=args.height,
         port=args.port,
         keep_frames=args.keep_frames,
+        quick_check=args.quick_check,
+        quick_check_seconds=args.quick_check_seconds,
     )
     print(f"{Fore.GREEN}✅ Web 渲染导出完成: {args.output}{Style.RESET_ALL}")
 
@@ -280,11 +295,14 @@ def run_pipeline(args: argparse.Namespace) -> None:
         output_path=args.output,
         scene=args.scene,
         controls_path=args.controls,
+        export_mode=args.export_mode,
         fps=args.fps,
         width=args.width,
         height=args.height,
         port=args.port,
         keep_frames=args.keep_frames,
+        quick_check=args.quick_check,
+        quick_check_seconds=args.quick_check_seconds,
     )
     print(f"{Fore.GREEN}✅ 全流程完成: {args.output}{Style.RESET_ALL}")
 
@@ -322,6 +340,19 @@ def build_subcommand_parser() -> argparse.ArgumentParser:
     render_parser.add_argument("--height", type=int, default=config.VIDEO_HEIGHT, help="输出高度")
     render_parser.add_argument("--port", type=int, default=4173, help="离线渲染临时端口")
     render_parser.add_argument("--keep-frames", action="store_true", help="保留中间帧图像")
+    render_parser.add_argument(
+        "--export-mode",
+        choices=["frame", "realtime"],
+        default="frame",
+        help="导出模式：frame=逐帧截图（默认），realtime=实时录制（更接近前端预览）",
+    )
+    render_parser.add_argument("--quick-check", action="store_true", help="快速检查模式（仅导出前几秒）")
+    render_parser.add_argument(
+        "--quick-check-seconds",
+        type=float,
+        default=20.0,
+        help="快速检查导出时长（秒，默认: 20）",
+    )
 
     pipeline_parser = subparsers.add_parser("pipeline", help="一键执行分析 + Web 离线渲染")
     pipeline_parser.add_argument("-i", "--input", required=True, help="输入音频文件路径")
@@ -345,6 +376,19 @@ def build_subcommand_parser() -> argparse.ArgumentParser:
     pipeline_parser.add_argument("--height", type=int, default=config.VIDEO_HEIGHT, help="输出高度")
     pipeline_parser.add_argument("--port", type=int, default=4173, help="离线渲染临时端口")
     pipeline_parser.add_argument("--keep-frames", action="store_true", help="保留中间帧图像")
+    pipeline_parser.add_argument(
+        "--export-mode",
+        choices=["frame", "realtime"],
+        default="frame",
+        help="导出模式：frame=逐帧截图（默认），realtime=实时录制（更接近前端预览）",
+    )
+    pipeline_parser.add_argument("--quick-check", action="store_true", help="快速检查模式（仅导出前几秒）")
+    pipeline_parser.add_argument(
+        "--quick-check-seconds",
+        type=float,
+        default=20.0,
+        help="快速检查导出时长（秒，默认: 20）",
+    )
 
     return parser
 
